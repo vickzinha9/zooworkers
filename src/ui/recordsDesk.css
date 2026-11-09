@@ -206,21 +206,6 @@
     html:not([data-high-contrast='true']) .app .view:not(.view--focus-game) {
       padding: 10px;
     }
-    .view .assign-row {
-      flex-wrap: wrap;
-    }
-    .view .assign-row .select {
-      min-width: 0;
-      max-width: 100%;
-    }
-  }
-  @media (max-width: 380px) {
-    .view .employee-card {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .view .employee-card__info {
-      width: 100%;
-    }
   }
 
   /* Evidence belongs to its incident, rather than a generic rarity badge. */

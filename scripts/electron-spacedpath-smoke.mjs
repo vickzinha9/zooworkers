@@ -14,6 +14,68 @@ const root = process.cwd();
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'wmno-spaced-'));
 // A path segment with a space AND parentheses, mirroring the user's "... (1)".
 const dir = path.join(base, 'game build (1)', 'claude app');
+const junction = path.join(dir, 'node_modules');
+
+// Cleanup only; it is not what this smoke verifies. On Windows, Chromium's helper
+// processes release the temp profile (and the launch cwd) a few seconds after
+// app.close(), so removal is retried for a while and a final failure only warns.
+// The node_modules link is removed on its own first, and the recursive removal of
+// the fixture runs only once that link is confirmed gone, so it can never reach the
+// repository's real node_modules.
+const CLEANUP_BUDGET_MS = 20_000;
+const CLEANUP_RETRY_MS = 500;
+const RETRYABLE = new Set(['EPERM', 'EBUSY', 'ENOTEMPTY', 'EACCES']);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let cleanupAttempts = 0;
+async function retrying(action) {
+  const deadline = Date.now() + CLEANUP_BUDGET_MS;
+  for (;;) {
+    cleanupAttempts += 1;
+    try {
+      action();
+      return null;
+    } catch (error) {
+      if (!RETRYABLE.has(error.code) || Date.now() >= deadline) return error;
+      await sleep(CLEANUP_RETRY_MS);
+    }
+  }
+}
+
+/** 'link' (the junction/symlink), 'gone', 'other' (not a link) or 'unknown'. */
+function junctionState() {
+  try {
+    return fs.lstatSync(junction).isSymbolicLink() ? 'link' : 'other';
+  } catch (error) {
+    return error.code === 'ENOENT' ? 'gone' : 'unknown';
+  }
+}
+
+async function removeFixture() {
+  const started = Date.now();
+  let error = null;
+  try {
+    // Unlink removes the link itself, never what it points at.
+    if (junctionState() === 'link') error = await retrying(() => fs.unlinkSync(junction));
+    const state = junctionState();
+    if (!error && state !== 'gone') {
+      error = new Error(`node_modules link is ${state}, so the fixture was left in place`);
+    }
+    if (!error) error = await retrying(() => fs.rmSync(base, { recursive: true, force: true }));
+  } catch (unexpected) {
+    error = unexpected;
+  }
+  const elapsed = `${Date.now() - started} ms, ${cleanupAttempts} attempt(s)`;
+  if (error) {
+    console.warn(
+      `SPACED-PATH WARN: temp fixture not removed after ${elapsed} ` +
+        `(${error.code ?? error.message}); delete ${base} by hand.`,
+    );
+  } else {
+    console.log(`SPACED-PATH: temp fixture removed after ${elapsed}.`);
+  }
+}
+
 fs.mkdirSync(dir, { recursive: true });
 fs.cpSync(path.join(root, 'dist'), path.join(dir, 'dist'), { recursive: true });
 fs.cpSync(path.join(root, 'dist-electron'), path.join(dir, 'dist-electron'), { recursive: true });
@@ -58,5 +120,5 @@ try {
   );
 } finally {
   await app.close();
-  fs.rmSync(base, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  await removeFixture();
 }

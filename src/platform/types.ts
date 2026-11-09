@@ -14,9 +14,21 @@ export interface WindowSettings {
   batterySaver: boolean;
   fpsLimit: number;
   closeToTray: boolean;
+  /** Remembered normal-state bounds (DIP), kept by the desktop shell. */
+  x?: number;
+  y?: number;
   width?: number;
   height?: number;
   maximized?: boolean;
+}
+
+/** The tray menu's words, sent in the player's language (i18n group `tray`). */
+export interface TrayLabels {
+  show: string;
+  hide: string;
+  quietMode: string;
+  settings: string;
+  quit: string;
 }
 
 export interface PlatformInfo {
@@ -43,6 +55,8 @@ export interface DesktopBridge {
   quit(): Promise<void>;
   getIdleSeconds(): Promise<number>;
   getPlatformInfo(): Promise<PlatformInfo>;
+  setTrayLabels(labels: TrayLabels): Promise<boolean>;
+  getSuspendedMs(fromMs: number, toMs: number): Promise<number | null>;
   onToggleVisibility(cb: () => void): () => void;
   onQuietMode(cb: (enabled: boolean) => void): () => void;
   onFocusChanged(cb: (focused: boolean) => void): () => void;

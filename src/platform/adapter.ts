@@ -1,4 +1,10 @@
-import type { DesktopBridge, PlatformInfo, WindowCorner, WindowSettings } from './types';
+import type {
+  DesktopBridge,
+  PlatformInfo,
+  TrayLabels,
+  WindowCorner,
+  WindowSettings,
+} from './types';
 
 // A single adapter the whole UI uses for "desktop companion" features. On the
 // desktop it forwards to the preload bridge (`window.desktop`); in the browser
@@ -34,6 +40,13 @@ export interface PlatformAdapter {
   quit(): Promise<void>;
   getIdleSeconds(): Promise<number>;
   getPlatformInfo(): Promise<PlatformInfo>;
+  /** Hands the tray menu its words in the player's language. False if not applied. */
+  setTrayLabels(labels: TrayLabels): Promise<boolean>;
+  /**
+   * Milliseconds of [fromMs, toMs] (Date.now() wall clock) the system was really
+   * suspended (asleep, hibernating), or null when that cannot be known.
+   */
+  getSuspendedMs(fromMs: number, toMs: number): Promise<number | null>;
   onToggleVisibility(cb: () => void): () => void;
   onQuietMode(cb: (enabled: boolean) => void): () => void;
   onFocusChanged(cb: (focused: boolean) => void): () => void;
@@ -88,6 +101,20 @@ class DesktopAdapter implements PlatformAdapter {
   }
   getPlatformInfo() {
     return this.bridge.getPlatformInfo();
+  }
+  setTrayLabels(labels: TrayLabels) {
+    // The real preload always has it; a partial QA stub of the bridge may not.
+    if (typeof this.bridge.setTrayLabels !== 'function') return Promise.resolve(false);
+    return this.bridge.setTrayLabels(labels);
+  }
+  getSuspendedMs(fromMs: number, toMs: number): Promise<number | null> {
+    // Anything but a real answer (no such bridge method, a rejected or odd reply) is
+    // "unknown", never "awake": the game then keeps its own rule for long gaps.
+    if (typeof this.bridge.getSuspendedMs !== 'function') return Promise.resolve(null);
+    return this.bridge.getSuspendedMs(fromMs, toMs).then(
+      (ms) => (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0 ? ms : null),
+      () => null,
+    );
   }
   onToggleVisibility(cb: () => void) {
     return this.bridge.onToggleVisibility(cb);
@@ -160,6 +187,14 @@ class BrowserAdapter implements PlatformAdapter {
   }
   async getPlatformInfo(): Promise<PlatformInfo> {
     return { isDesktop: false, platform: 'browser', isSteamDeck: false, appVersion: 'web' };
+  }
+  async setTrayLabels() {
+    // The browser has no tray menu.
+    return false;
+  }
+  async getSuspendedMs(): Promise<number | null> {
+    // A browser cannot see system sleep.
+    return null;
   }
   onToggleVisibility() {
     return () => {};

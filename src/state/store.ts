@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { GameEngine, type DecorationPurchase } from '../sim/engine';
+import { GameEngine, type CatchUpHint, type DecorationPurchase } from '../sim/engine';
+import { BALANCE } from '../sim/config';
+import type { OfflineResult } from '../sim/offline';
 import { SaveManager } from '../save/saveManager';
 import {
   addAway,
@@ -67,6 +69,34 @@ export const BOOT_SAVE_IS_NEW = loaded.isNew;
 const engine = new GameEngine(loaded.state, { deterministic: false });
 engine.onSave((s) => save.save(s));
 
+/** The monotonic clock: real time passing, never moved by a change of the computer's clock. */
+function monotonicNow(): number | null {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : null;
+}
+
+/**
+ * The moment the company was last settled to, with the monotonic clock read at that
+ * same instant, so the awake time the desktop shell vouches for can be checked
+ * against time that really passed (see `vouchedHint`). Set by `settledHere`.
+ */
+let settledMark = { wall: engine.settledUntil(), mono: monotonicNow() };
+
+/**
+ * Run a settlement and mark where it left the company. The engine reads the wall
+ * clock as a settlement starts and settles the company up to that instant, so the
+ * monotonic clock is read just before it, never after: a long catch-up in a starved,
+ * minimized renderer can take seconds, and a mark read after it would make those
+ * seconds look like a clock moved forward, and an awake gap be paid as a sleep.
+ */
+function settledHere<T>(settlement: () => T): T {
+  const mono = monotonicNow();
+  const result = settlement();
+  settledMark = { wall: engine.settledUntil(), mono };
+  return result;
+}
+
 // The time the game was closed, settled once at the away rules on boot (not for a
 // brand-new game): the vault and the crate, the finds and incidents that time
 // brought. The engine files it at once, so a reload cannot pay it twice.
@@ -78,7 +108,7 @@ let returnTally: ReturnTally | null = null;
 let returnId = 0;
 if (!loaded.isNew) {
   const left = leaveTally(engine.state, engine.state.lastSaved);
-  const settled = engine.settleClosedTime();
+  const settled = settledHere(() => engine.settleClosedTime());
   if (settled && !settled.ignored) returnTally = addAway(left, settled, 'closed');
 }
 
@@ -189,7 +219,11 @@ export const useStore = create<StoreState>((set) => {
     simulateAway: (seconds) => {
       // Measured from before the settlement, as if the game had been closed `seconds` ago.
       const left = leaveTally(engine.state, Date.now() - seconds * 1000);
-      returnTally = addAway(left, engine.settleAway(seconds), 'closed');
+      returnTally = addAway(
+        left,
+        settledHere(() => engine.settleAway(seconds)),
+        'closed',
+      );
       set({ returnSummary: takeReturn() });
     },
     setPhotoMode: (v) => set({ photoMode: v }),
@@ -390,7 +424,9 @@ export function replaceStateQuietly(next: GameState): void {
   // Another company: whatever the note said about the old one no longer applies.
   returnTally = null;
   useStore.setState({ returnSummary: null });
-  engine.replaceState(next);
+  settledHere(() => engine.replaceState(next));
+  // A question about the old company's gap is about nothing now.
+  suspendQuery = null;
   // An imported save is a load like any other, so it gets the same treatment:
   // whatever it already satisfies is history, not an achievement ceremony.
   catchUpAchievementsQuietly();
@@ -543,6 +579,139 @@ function welcomeBack(): void {
   audio.play('paper');
 }
 
+// ---------------------------------------------------------------------------
+// Asking the desktop shell about a long gap. In a browser a hidden page is woken
+// about once a minute, so a gap over `awayGapSeconds` means the computer slept. A
+// minimized Windows window can go longer than that without a single timer while
+// the computer is awake, and only the desktop shell (never throttled, told of every
+// suspend and resume) knows which it was. With a shell registered, such a gap is
+// not settled until it answers how much of it the computer was suspended.
+// ---------------------------------------------------------------------------
+
+type SuspendOracle = (fromMs: number, toMs: number) => Promise<number | null>;
+
+/** How long the shell may take to answer before the gap is settled without it. */
+const SUSPEND_QUERY_TIMEOUT_MS = 1000;
+const AWAY_GAP_MS = BALANCE.awayGapSeconds * 1000;
+/** Clock jitter forgiven when the awake time is checked against the monotonic clock. */
+const MONOTONIC_SLACK_MS = 5000;
+
+let suspendOracle: SuspendOracle | null = null;
+
+interface SuspendQuery {
+  /** the company and the gap ([from, to], wall-clock ms) the question is about. */
+  company: GameState;
+  from: number;
+  to: number;
+  /** the monotonic clock at `from`, when it was read there. */
+  monoFrom: number | null;
+  /** ms suspended, null when the shell could not say; undefined while it is out. */
+  answer?: number | null;
+}
+/** The one question out (or answered and not yet applied). */
+let suspendQuery: SuspendQuery | null = null;
+
+/**
+ * Register the desktop shell's answer to "how many ms of [fromMs, toMs] (wall clock)
+ * was the computer suspended?" (a number, or null when it cannot say). Without one
+ * (the browser) a long gap is settled as before: at once, as a sleep.
+ */
+export function setSuspendOracle(
+  oracle: ((fromMs: number, toMs: number) => Promise<number | null>) | null,
+): void {
+  suspendOracle = oracle;
+}
+
+/** Ask the shell about the gap since the company was settled, once. */
+function askShell(oracle: SuspendOracle): void {
+  const from = engine.settledUntil();
+  const to = Date.now();
+  const query: SuspendQuery = {
+    company: engine.state,
+    from,
+    to,
+    monoFrom: settledMark.wall === from ? settledMark.mono : null,
+  };
+  suspendQuery = query;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), SUSPEND_QUERY_TIMEOUT_MS);
+  });
+  let asked: Promise<number | null>;
+  try {
+    asked = Promise.resolve(oracle(from, to)).catch(() => null);
+  } catch {
+    asked = Promise.resolve(null);
+  }
+  void Promise.race([asked, timedOut]).then((answer) => {
+    clearTimeout(timer);
+    // Settled meanwhile (a hide, an unload) or another company: nothing to apply.
+    if (suspendQuery !== query) return;
+    query.answer = typeof answer === 'number' ? answer : null;
+    advanceGame();
+    // Settled behind the visibility handler's back: attended again if in sight.
+    if (!suspendQuery && officeInSight()) engine.setAttended(true);
+  });
+}
+
+/**
+ * The shell's answer as a hint for `engine.catchUp`, when it can be used: a finite
+ * number of ms ≥ 0, and the awake time it leaves no longer than the time that really
+ * passed by the monotonic clock. A clock moved forward is neither open play nor a
+ * sleep, so a gap the monotonic clock cannot account for keeps today's rule.
+ */
+function vouchedHint(query: SuspendQuery): CatchUpHint | undefined {
+  const answer = query.answer;
+  const mono = monotonicNow();
+  if (typeof answer !== 'number' || !Number.isFinite(answer) || answer < 0) return undefined;
+  if (query.monoFrom === null || mono === null) return undefined;
+  const gapMs = Date.now() - query.from;
+  const suspendedMs = Math.min(answer, gapMs);
+  const passedMs = mono - query.monoFrom;
+  if (gapMs - suspendedMs > passedMs + Math.max(MONOTONIC_SLACK_MS, gapMs * 0.01)) {
+    return undefined;
+  }
+  return { suspendedSeconds: suspendedMs / 1000 };
+}
+
+/**
+ * Settle the company up to now, each interval once (see `engine.catchUp`). With a
+ * shell registered, a gap longer than `awayGapSeconds` waits for its answer
+ * ('waiting': nothing is settled meanwhile, for about a second at most). `urgent`
+ * callers (a hide, an unload) cannot wait: a question still out is dropped and the
+ * gap is settled by today's rule.
+ */
+function settle(urgent = false): OfflineResult | null | 'waiting' {
+  const query = suspendQuery;
+  if (query) {
+    const current = query.company === engine.state && query.from === engine.settledUntil();
+    if (current && query.answer === undefined && !urgent) return 'waiting';
+    suspendQuery = null;
+    // An answer read long after it was asked (the page ran nothing in between) does
+    // not cover the end of the gap: it is asked again, below.
+    if (current && query.answer !== undefined && Date.now() - query.to <= AWAY_GAP_MS) {
+      const hint = vouchedHint(query);
+      return settledHere(() => (hint ? engine.catchUp(hint) : engine.catchUp()));
+    }
+  }
+  if (!urgent && suspendOracle && Date.now() - engine.settledUntil() > AWAY_GAP_MS) {
+    askShell(suspendOracle);
+    return 'waiting';
+  }
+  return settledHere(() => engine.catchUp());
+}
+
+/** An away settlement joins the stretch the player is gone, or is a return of its own. */
+function tellAway(result: OfflineResult | null): void {
+  if (result && !result.ignored) {
+    // Out of sight already, the sleep joins the stretch the player is away; in
+    // front of them, it is a return of its own.
+    returnTally = returnTally
+      ? addAway(returnTally, result, 'asleep')
+      : tallyFromAway(engine.state, result, Date.now());
+  }
+}
+
 /**
  * Advance the company to the present (see `engine.catchUp` for the one rule).
  *
@@ -551,17 +720,13 @@ function welcomeBack(): void {
  * stretch the 100ms interval to a second or a whole minute, and all of it is open
  * play. A gap longer than `awayGapSeconds` means the computer slept or the process
  * was frozen, which is settled like time with the game closed — and is a return
- * of its own when it happened in front of the player.
+ * of its own when it happened in front of the player. On the desktop the shell is
+ * asked first (see `setSuspendOracle`): what it says was awake is open play.
  */
 export function advanceGame(): void {
-  const result = engine.catchUp();
-  if (result && !result.ignored) {
-    // Out of sight already, the sleep joins the stretch the player is away; in
-    // front of them, it is a return of its own.
-    returnTally = returnTally
-      ? addAway(returnTally, result, 'asleep')
-      : tallyFromAway(engine.state, result, Date.now());
-  }
+  const result = settle();
+  if (result === 'waiting') return;
+  tellAway(result);
   // In sight with a stretch away still open: the player is back (this also covers
   // a window the browser never said had come back).
   if (returnTally && officeInSight()) {
@@ -580,7 +745,7 @@ export function stopGameLoop(): void {
     clearInterval(loopHandle);
     loopHandle = null;
   }
-  engine.catchUp();
+  settle(true);
   engine.save();
 }
 
@@ -593,7 +758,14 @@ export function stopGameLoop(): void {
  */
 function onVisibilityChange(): void {
   if (document.visibilityState === 'hidden') {
-    engine.catchUp();
+    // Back for less time than the shell took to answer: the gap is settled now by
+    // today's rule, and that brief return is still told.
+    const answering = suspendQuery !== null;
+    const result = settle(true);
+    if (answering && result !== 'waiting') {
+      tellAway(result);
+      welcomeBack();
+    }
     engine.setAttended(false);
     // The next stretch away starts here. A note still up stays up: a glance at
     // another window must not take it away unread; a real absence replaces it.
@@ -602,13 +774,15 @@ function onVisibilityChange(): void {
     return;
   }
   advanceGame();
-  engine.setAttended(true);
+  // While the shell is asked about the gap it is still time nobody saw: the office
+  // is attended once the answer has settled it.
+  if (!suspendQuery) engine.setAttended(true);
 }
 
 // File the company on page hide/unload, with the time up to that moment counted.
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    engine.catchUp();
+    settle(true);
     engine.save();
   });
   document.addEventListener('visibilitychange', onVisibilityChange);

@@ -44,7 +44,7 @@ function subscribeNarrow(onChange: () => void): () => void {
 const readNarrow = () => Boolean(window.matchMedia?.(NARROW_QUERY).matches);
 
 export function App() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { state, engine } = useGame();
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
@@ -146,6 +146,19 @@ export function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The tray menu is drawn by the desktop shell, outside the page, so it is handed
+  // its words in the player's language: at start and whenever the language changes.
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  useEffect(() => {
+    void platform.setTrayLabels({
+      show: t('tray.show'),
+      hide: t('tray.hide'),
+      quietMode: t('tray.quietMode'),
+      settings: t('tray.settings'),
+      quit: t('tray.quit'),
+    });
+  }, [platform, t, language]);
 
   // Desktop bridge events.
   useEffect(() => {

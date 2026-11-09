@@ -18,7 +18,8 @@ import '@fontsource/nunito/latin-700.css';
 import '@fontsource/nunito/latin-800.css';
 import { initI18n } from './i18n';
 import { App } from './App';
-import { getGameState } from './state/store';
+import { getGameState, setSuspendOracle } from './state/store';
+import { getPlatform } from './platform/adapter';
 import { GAME_TITLE } from './brand';
 // `legacy` layer (pre-Phase-1 screens), then the `game` layer (the rebuilt shell).
 import './styles.css';
@@ -44,6 +45,14 @@ import './ui/game/minigames.css';
 async function bootstrap() {
   // Keep the browser/Electron window title in sync with the central brand.
   if (typeof document !== 'undefined') document.title = GAME_TITLE;
+
+  // Only the desktop shell can tell real sleep from a minimized window that went
+  // minutes without a timer; ask it before the first tick. (A browser keeps the
+  // game's own rule for long gaps.)
+  const platform = getPlatform();
+  if (platform.isDesktop) {
+    setSuspendOracle((fromMs, toMs) => platform.getSuspendedMs(fromMs, toMs));
+  }
 
   // Prefer the language saved in the game state; i18next detector handles the
   // rest (localStorage → navigator → 'en').

@@ -627,6 +627,119 @@
     flex-basis: 100%;
     margin: 0;
   }
+  /* Team: a roster card lays itself out from the width the sheet gives it. (It used to
+     read the window's width, so the 350–540 px side panel of an 800–1920 px window got
+     the wide three-column card and its file column collapsed to a letter a line.)
+     Narrow: the portrait, then the file, then the actions. Medium: the actions stand
+     under the portrait with the file beside them. Wide: three columns. The portrait
+     keeps its own size in all three. */
+  .view--employees .employee-list {
+    container: roster / inline-size;
+  }
+  .view--employees .employee-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'art'
+      'info'
+      'actions';
+    text-align: center;
+  }
+  .view--employees .employee-card__art {
+    grid-area: art;
+    justify-self: center;
+  }
+  .view--employees .employee-card__info {
+    grid-area: info;
+    min-width: 0;
+  }
+  .view--employees :is(.employee-card__name, .employee-card__fullname, .employee-card__role) {
+    overflow-wrap: anywhere;
+  }
+  .view--employees .employee-card__name .pill {
+    flex: none;
+    white-space: nowrap;
+  }
+  .view--employees
+    :is(.employee-card__name, .employee-card__bond, .employee-card__controls, .outfits) {
+    justify-content: center;
+  }
+  /* Mood and room chips side by side with a gap; the name field, the room and the
+     outfits each take a line of their own. */
+  .view--employees .employee-card__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .view--employees .employee-card__controls > :is(.mood-chip, .affinity-chip) {
+    align-self: center;
+  }
+  .view--employees .employee-card__controls > :is(.nickname-input, .assign-row, .outfits) {
+    flex: 1 1 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .view--employees .assign-row {
+    flex-wrap: wrap;
+  }
+  .view--employees .assign-row .select {
+    flex: 1 1 9rem;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 32px;
+  }
+  .view--employees .outfit-chip {
+    min-height: 30px;
+  }
+  /* Narrow: Promover across the card (its gain over it), then Dar café | Visitar. */
+  .view--employees .employee-card__actions {
+    grid-area: actions;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: 6px;
+  }
+  .view--employees .employee-card__actions > :not(.ghost-btn) {
+    grid-column: 1 / -1;
+  }
+  .view--employees .employee-card__actions .buy-btn {
+    justify-content: center;
+  }
+  @container roster (min-width: 440px) {
+    .view--employees .employee-card {
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: auto 1fr;
+      grid-template-areas:
+        'art info'
+        'actions info';
+      text-align: start;
+    }
+    .view--employees
+      :is(.employee-card__name, .employee-card__bond, .employee-card__controls, .outfits) {
+      justify-content: flex-start;
+    }
+    .view--employees .employee-card__actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      align-self: start;
+    }
+    /* A shortfall note or an unlock line wraps inside the column the buttons set,
+       instead of widening it. */
+    .view--employees .employee-card__actions > :is(.employee-card__short, .muted) {
+      width: 0;
+      min-width: 100%;
+    }
+  }
+  @container roster (min-width: 640px) {
+    .view--employees .employee-card {
+      grid-template-columns: auto minmax(0, 1fr) minmax(8.5rem, auto);
+      grid-template-rows: auto;
+      grid-template-areas: 'art info actions';
+    }
+  }
   /* Visit choices are as tall as what they say. (A grid in a stretched row was
      stretching each one-line option into a ~180px empty box.) */
   .talk__choices {

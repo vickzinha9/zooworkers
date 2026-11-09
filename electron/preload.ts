@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, IPC_EVENTS, type WindowSettings, type WindowCorner, type PlatformInfo } from './ipc';
+import {
+  IPC,
+  IPC_EVENTS,
+  type WindowSettings,
+  type WindowCorner,
+  type PlatformInfo,
+  type TrayLabels,
+} from './ipc';
 
 // The ONLY bridge between the sandboxed renderer and the main process.
 // Nothing here exposes `require`, `process`, or arbitrary IPC. Each method maps
@@ -26,6 +33,15 @@ const api = {
   quit: (): Promise<void> => ipcRenderer.invoke(IPC.quit),
   getIdleSeconds: (): Promise<number> => ipcRenderer.invoke(IPC.getIdleSeconds),
   getPlatformInfo: (): Promise<PlatformInfo> => ipcRenderer.invoke(IPC.getPlatformInfo),
+  /** The tray menu's words in the player's language; resolves false if main rejects them. */
+  setTrayLabels: (labels: TrayLabels): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.setTrayLabels, labels),
+  /**
+   * Milliseconds of [fromMs, toMs] (Date.now() wall clock) the system was really
+   * asleep, or null when main cannot vouch for that span. Rejects non-finite input.
+   */
+  getSuspendedMs: (fromMs: number, toMs: number): Promise<number | null> =>
+    ipcRenderer.invoke(IPC.getSuspendedMs, fromMs, toMs),
 
   // Event subscriptions. Return an unsubscribe function to avoid listener leaks.
   onToggleVisibility: (cb: () => void) => subscribe(IPC_EVENTS.toggleVisibility, () => cb()),
