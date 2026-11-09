@@ -3926,20 +3926,8 @@
     justify-content: center;
   }
 
-  /* Very narrow windows: stack the employee card so nothing gets cramped. */
-  @media (max-width: 380px) {
-    .employee-card {
-      grid-template-columns: 1fr;
-      justify-items: center;
-      text-align: center;
-    }
-    .employee-card__actions {
-      align-items: center;
-    }
-    .friendship {
-      justify-content: center;
-    }
-  }
+  /* The Team roster card stacks by its own width, not the window's: see the `roster`
+   container in ui/game/shell.css. */
 
   /* Guarantee media/canvas previews never overflow their container. */
   .moment-modal__img,

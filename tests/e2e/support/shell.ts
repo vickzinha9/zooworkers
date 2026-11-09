@@ -123,6 +123,9 @@ export async function stubDesktop(page: Page): Promise<void> {
           isSteamDeck: false,
           appVersion: '0.0.0-test',
         }),
+      setTrayLabels: () => Promise.resolve(true),
+      // Unknown: the browser test has no record of system sleep.
+      getSuspendedMs: () => Promise.resolve(null),
       onToggleVisibility: noop,
       onQuietMode: noop,
       onFocusChanged: noop,

@@ -90,7 +90,8 @@ after you build it yourself with Option B.
   take it. What you choose can show up again later, in the office.
 - **Open menus:** use the tabs at the top (Upgrades, Team, Company, etc.).
 - **Move the window:** click-and-drag the **top bar** (the part with the company
-  name) to anywhere on your screen — including a corner.
+  name) to anywhere on your screen — including a corner. Next time it opens right
+  where you left it (or in its corner, if that monitor is no longer connected).
 - **Dock to a corner:** open **Settings → Desktop Window → Screen corner** and
   pick one.
 - **Always on top (stays visible while you work):** Settings → Desktop Window →

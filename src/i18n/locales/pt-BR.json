@@ -2469,6 +2469,13 @@
     "close": "Fechar",
     "closeToTray": "Botão Fechar minimiza para a bandeja"
   },
+  "tray": {
+    "show": "Mostrar",
+    "hide": "Esconder",
+    "quietMode": "Modo Silencioso",
+    "settings": "Ajustes…",
+    "quit": "Sair"
+  },
   "photo": {
     "save": "Salvar foto",
     "saved": "Salvo!",

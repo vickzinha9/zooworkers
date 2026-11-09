@@ -35,7 +35,10 @@ collectible decoration game. Understandable in seconds; hours of depth.
 Keeping the game open is never worse than closing it: open time is credited in
 full however rarely a hidden window ticks, and a gap long enough to mean the
 computer slept is settled like time away (offline rules, crate filled, finds
-waiting). There are no arbitrary waiting walls.
+waiting). On the desktop app the game asks Windows how much of such a gap the
+computer was really asleep (a suspension Windows announces, or one in which the whole
+app ran nothing for over a minute), so a long minimized stretch is not mistaken for
+sleep; the browser judges by the gap alone. There are no arbitrary waiting walls.
 
 ## Resources
 

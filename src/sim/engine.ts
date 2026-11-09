@@ -370,6 +370,12 @@ export interface EngineOptions {
 
 export type EngineListener = () => void;
 
+/** What the desktop shell knows about a long gap (see `GameEngine.catchUp`). */
+export interface CatchUpHint {
+  /** seconds of the gap the computer was really suspended (asleep, hibernating). */
+  suspendedSeconds: number;
+}
+
 /**
  * Carry an old save's gift memory over. Before gifts became a discovery game the
  * only gift remembered was "their favourite", given once; record it as the gift
@@ -780,10 +786,19 @@ export class GameEngine {
    * so one throttled minute-long tick earns what six hundred quick ones would.
    */
   tick(deltaSeconds: number): void {
+    this.playOpen(deltaSeconds, this.now(), 60 * 60); // never process >1h in one call
+  }
+
+  /**
+   * `deltaSeconds` of open play that ended at `end` (now, for a tick; earlier, for
+   * the open part of a vouched gap, see `catchUp`), counting at most `limitSeconds`
+   * of it. Whatever its length, it is simulated in at most ~120 slices.
+   */
+  private playOpen(deltaSeconds: number, end: number, limitSeconds: number): void {
     if (deltaSeconds <= 0 || !Number.isFinite(deltaSeconds)) return;
-    const end = this.now();
+    const span = Math.min(deltaSeconds, limitSeconds);
     this.settledAt = end;
-    let remaining = Math.min(deltaSeconds, 60 * 60); // never process >1h in one call
+    let remaining = span;
     let sliceStart = end - remaining * 1000;
     // Bounded work per call: at most ~120 slices, so a window woken after a few
     // throttled minutes catches up in a blink instead of replaying every half second.
@@ -802,8 +817,8 @@ export class GameEngine {
     }
     // Nobody can see the office (minimized, hidden): what waits to be noticed
     // keeps its place rather than being decided or fading offscreen.
-    if (!this.attended) holdWaiting(this.state, Math.min(deltaSeconds, 3600) * 1000);
-    this.state.stats.playTimeSeconds += Math.min(deltaSeconds, 3600);
+    if (!this.attended) holdWaiting(this.state, span * 1000);
+    this.state.stats.playTimeSeconds += span;
     this.tickFocus();
     this.rolloverDaily();
 
@@ -821,8 +836,10 @@ export class GameEngine {
     const t = this.now();
     this.tempBoosts = this.tempBoosts.filter((b) => b.endsAt > t);
     for (const [room, ends] of this.rushes) if (ends <= t) this.rushes.delete(room);
-    this.rollFinds(Math.min(deltaSeconds, 3600));
-    this.stepOffice(Math.min(deltaSeconds, 3600));
+    // What the office turns up on its own is rolled for at most an hour of it per
+    // call: an hour fills every place a find, a parcel or a curiosity can wait in.
+    this.rollFinds(Math.min(span, 3600));
+    this.stepOffice(Math.min(span, 3600));
     // drop expired temporary employee emotions
     this.expireEmotions(t);
 
@@ -1109,10 +1126,12 @@ export class GameEngine {
    * efficiency up to the cap, the crate filled first, the finds that time would
    * have brought, a few things started in the office. Nobody could look meanwhile,
    * so what was already waiting keeps its place. Returns what happened, for the
-   * welcome-back note.
+   * welcome-back note. The company is settled up to `at` (now, unless a caller that
+   * already read the clock passes that instant, so the settlement ends where it
+   * was measured to).
    */
-  settleAway(seconds: number): OfflineResult {
-    this.settledAt = this.now();
+  settleAway(seconds: number, at: number = this.now()): OfflineResult {
+    this.settledAt = at;
     const result = computeAway(this.state, seconds);
     if (!result.ignored) {
       applyOffline(this.state, result);
@@ -1126,20 +1145,43 @@ export class GameEngine {
   }
 
   /**
+   * The wall-clock moment the company is settled up to (read-only): the start of
+   * the next interval `catchUp` will settle.
+   */
+  settledUntil(): number {
+    return this.settledAt;
+  }
+
+  /**
    * Bring the company up to the present. This is the one place elapsed wall-clock
    * time is accounted for while the game runs, each interval exactly once:
    *
-   *  - forward, up to `awayGapSeconds` since the last settlement: open play. A
-   *    minimized or hidden window that the browser only wakes once a minute is
-   *    still open, and every second of it is ticked at the open rules.
-   *  - forward, longer: the game was not running (the computer slept, the process
-   *    was frozen). Settled at the away rules, like time with the game closed.
+   *  - forward, up to `awayGapSeconds` since the last settlement: open play, hint
+   *    or not. A minimized or hidden window that the browser only wakes once a
+   *    minute is still open, and every second of it is ticked at the open rules.
+   *  - forward, longer, and nobody can say what happened: the game was not running
+   *    (the computer slept, the process was frozen). Settled at the away rules,
+   *    like time with the game closed.
+   *  - forward, longer, with `hint.suspendedSeconds` — the desktop shell's word on
+   *    how much of this gap the computer was really suspended (a minimized Windows
+   *    window can go minutes without a timer while the computer is awake). That
+   *    much (at most the whole gap) is settled at the away rules and the rest is
+   *    open play at the open rules, in at most ~120 slices however long, so boosts,
+   *    rushes and Focus Harvest end inside it where they ended in time. The open
+   *    part comes first: a window goes out of sight while the player is at the
+   *    computer and it sleeps later (idle, lid), and the timers the player started
+   *    are running as the gap begins, so they are valued as they ran. Settling the
+   *    sleep last also keeps the welcome back exact: an away settlement is the
+   *    stretch that ends now (`tallyFromAway`). A hint that is not a finite number
+   *    of seconds ≥ 0 counts as no hint.
    *  - backwards: the clock was turned back. Nothing is paid and nothing ages; the
-   *    whole timeline moves back with the clock (see `sim/timeline.ts`).
+   *    whole timeline moves back with the clock (see `sim/timeline.ts`). Hint or not.
    *
-   * Returns the away settlement when there was one, for the welcome-back note.
+   * Returns the away settlement when there was one (for a hint, only the seconds
+   * suspended), for the welcome-back note. Whichever way, the company ends settled
+   * to the instant the clock was read as the call began, however long the call took.
    */
-  catchUp(): OfflineResult | null {
+  catchUp(hint?: CatchUpHint): OfflineResult | null {
     const now = this.now();
     const elapsedMs = now - this.settledAt;
     if (!Number.isFinite(elapsedMs)) {
@@ -1151,8 +1193,16 @@ export class GameEngine {
       return null;
     }
     if (elapsedMs === 0) return null;
-    if (elapsedMs > BALANCE.awayGapSeconds * 1000) return this.settleAway(elapsedMs / 1000);
-    this.tick(elapsedMs / 1000);
+    if (elapsedMs > BALANCE.awayGapSeconds * 1000) {
+      const suspended = hint?.suspendedSeconds;
+      if (typeof suspended !== 'number' || !Number.isFinite(suspended) || suspended < 0) {
+        return this.settleAway(elapsedMs / 1000, now);
+      }
+      const awayMs = Math.min(elapsedMs, suspended * 1000);
+      this.playOpen((elapsedMs - awayMs) / 1000, now - awayMs, Number.POSITIVE_INFINITY);
+      return awayMs > 0 ? this.settleAway(awayMs / 1000, now) : null;
+    }
+    this.playOpen(elapsedMs / 1000, now, 60 * 60);
     return null;
   }
 
@@ -1170,7 +1220,7 @@ export class GameEngine {
       this.rewindTo(now);
       return null;
     }
-    return this.settleAway(elapsedMs / 1000);
+    return this.settleAway(elapsedMs / 1000, now);
   }
 
   /** The clock went back to `now`: move the timeline back with it (nothing paid, nothing aged). */
