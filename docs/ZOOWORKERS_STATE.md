@@ -9,6 +9,8 @@ on top of Chapter 10 (`f2c5b90`), Chapter 8 (`60fdd3c`), Chapter 7 (`4639fa2`), 
 (`25ba899`), Chapter 5 (`f4ae64c`), Chapter 3 (`8cbf590`), Chapter 2 (`d6c4d28`), Chapter 9
 (`d9fab09`), Chapter 4 (`e7bac62`), Chapter 1 (`80264a8`) and the setup commit `c55d356`; clean.
 `7a7ee3d` (architect's snapshot) is an ancestor; never roll back to it.
+`feat/zooworkers-phase-2-release-hygiene` (Phase 2, record below) adds one commit on `9f5ef83`;
+it is independent of `feat/zooworkers-windows-verification` (Phase 1).
 
 ## Active configuration
 
@@ -44,6 +46,10 @@ on top of Chapter 10 (`f2c5b90`), Chapter 8 (`60fdd3c`), Chapter 7 (`4639fa2`), 
 - Final integration session: the same; `/tmp` is not kept between shell calls either, so raw
   logs went to the ignored `visual-artifacts/logs/`. CI artifacts (the Playwright report)
   cannot be downloaded from here (HTTP 403), so CI evidence is the job log.
+- Phase 2 session (Claude Code, native Windows 11): E2E runs on this PC at
+  `npm run test:e2e -- --workers=4`; the global setup keeps the run's processes off Windows
+  power throttling (see the Phase 2 record). Prettier on this CRLF checkout needs
+  `--end-of-line auto`. No `gh` CLI: CI evidence comes from the GitHub web pages.
 
 ## Validation
 
@@ -892,7 +898,124 @@ broken): the Team sheet's first opening with all 23 and every decoration takes ~
 Release readiness: the browser build is integrated and green, but the release stays BLOCKED
 on the human checks below (audio, physical touch, native Windows/DPI). PR #9 is not merged.
 
+### Phase 2 record — integration and release hygiene
+
+`feat/zooworkers-phase-2-release-hygiene` on `9f5ef83`, apart from Phase 1's
+`feat/zooworkers-windows-verification` (which records its own work). Claude Code on native
+Windows 11: i5-14400F (6 performance + 4 efficiency cores, 16 threads), Balanced power plan,
+Node 24, Chromium 1228.
+
+Language menu. Measured: the ten draft locales hold 24 of 4,424 keys (0.5%; 0.1% of words);
+pt-BR 99.3% of keys and 99.9% of words (the rest are names, "OK" and the like). Settings
+offered all twelve by name, so "Deutsch" gave English text under `lang="de"` (a screen reader
+reads it in a German voice), and the browser detector opened a German, Spanish, French or
+Japanese system in its draft (zh-HK in zh-CN). Now (`src/i18n/index.ts`): Settings lists the
+complete languages (`_meta.complete`), English and Português (Brasil); start picks the player's
+choice when it is offered, else the first complete system language (any Portuguese → pt-BR),
+else English; a save or `wmno.lang` naming a draft opens in a complete language and the save
+keeps its value. The draft files stay. `i18next-browser-languagedetector` is no longer imported
+(still in `package.json`). Hiding the drafts, not labelling them partial, is the recommended
+option and awaits the user's decision (Blockers).
+
+E2E reliability. Each named spec ran 50 times per row (`--repeat-each=50`); failed runs:
+
+| Run                         | minigame-rounds (8 tests)      | office-play (22) | event-setting (4) |
+| --------------------------- | ------------------------------ | ---------------- | ----------------- |
+| `9f5ef83`, 8 workers        | 169/400, 74 min                | 6/1100, 33 min   | 82/200, 19 min    |
+| + EcoQoS opt-out, 8 workers | 53/400, 33 min                 | 0/1100, 13 min   | 0/200, 3.4 min    |
+| + EcoQoS opt-out, 4 workers | 4/400, 33 min                  | —                | —                 |
+| Final, 8 workers            | 47/400, 36 min (timeouts only) | spec unchanged   | spec unchanged    |
+| Final, 4 workers            | 0/400, 26 min                  | —                | —                 |
+
+office-play and event-setting are unchanged by the test fixes; at 4 workers they pass in each
+full run below. In the "Final" rows the Esc-pause test still ran on a running clock; it holds
+its clock since (50/50 at 4 workers).
+
+1. Machine, all three specs: Windows power throttling (EcoQoS) keeps background, windowless
+   processes (headless Chromium, the Playwright workers) on the four efficiency cores. They ran
+   at 98–100% while the performance threads idled at 10–35%; a normal-priority watcher woke up
+   to 96 s late (a high-priority one never), and waves of tests timed out at whatever step they
+   were on (new page, goto, click, `runFor`). `tests/e2e/support/globalSetup.ts` starts
+   `scripts/e2e-windows-qos.ps1` on Windows, which opts only the run's own process tree out
+   (`SetProcessInformation`, `ProcessPowerThrottling`); `E2E_WINDOWS_QOS=0` restores the old
+   behaviour. event-setting ×10 at 8 workers: 8/40 and 23/40 failed in 4.3–6.4 min before;
+   40/40 passed in 43 s after.
+2. Test design, minigame-rounds: the installed fake clock also runs in real time between
+   steps, so a round's seed (the clock when a game opens) depended on how long the office took
+   to load, and under load the round moved on between steps: a pest came up in the drawer a
+   test was about to press as empty (with a 3 s wait added: a new pest in 3 of 3 runs, none
+   when held), an order rolled over before its check, a round ended before the taps reached 200. `start` now stops the clock at a fixed moment before it opens a game, so each round is
+   the same round every run (same first order and drawer ×4) and moves only as the test runs
+   it; what the game draws on its next frame (a focus) needs a frame of clock. The mastery
+   loop's 400 steps stopped 400 ms short of the 30 s round, reached only through real time; its
+   bound is now the round's length. The Coffee order test tapped the first drop rather than
+   what the ticket asked for; the Bug Squash shift test made six reads per 80 ms step (now one).
+   No assertion was changed, removed or loosened.
+3. Cost, understood: Playwright's fake clock waits a real macrotask (≥ 4 ms) after every timer
+   it fires, and a Bug Squash round fires about 580 callbacks per 10 s, so fast-forwarding a
+   round is CPU-bound (alone: the shift test 8.6 s, the payout test 23 s). At 8 workers on 10
+   physical cores they stretch about 3×: the 47 final failures are all timeouts (39 the shift
+   test against 30 s, 8 the mastery test against 90 s), none an assertion. Local E2E on this PC
+   is therefore stated at 4 workers (`npm run test:e2e -- --workers=4`); CI's 4-vCPU runner uses
+   Playwright's default of 2.
+
+4. Trace cost, `release-transformation` (found by the full suite at 4 workers, 381/382: the
+   gift test ran out of time on its last screen). Every test there opens a mature company (an
+   office of about 2,900 elements), and `trace: 'retain-on-failure'` records a DOM snapshot of
+   it at every action. The spec ×5 at 4 workers: 10/40 timed out (gift test 5/5) in 376 s;
+   with no trace 0/40 in 119 s. That spec now keeps traces without the per-action DOM
+   snapshots (actions, timings, console, network and screenshots stay; checked on a forced
+   failure): 0/40 in 151 s, gift test median 13.2 s. The final integration's CI failure of
+   this spec (13 s untraced, 34–60 s traced) had the same cause.
+
+No application defect was found behind any of these failures.
+
+Docs: `AGENTS.md` and the issue template's advisory link name `vickzinha9/zooworkers` (the old
+URLs only redirect). `docs/GAME_DESIGN.md` (narrative-content, checked against
+`content/employees.ts`, `rooms.ts` and `sim/minigames.ts`) lists the 23, the 21 rooms and the
+three games with their play and rewards, and corrects the rush (9 taps, not 8) and the helpers
+(a machine after 45 s, not a minute). `LOCALIZATION.md`, `README.md`, `STEAM.md` and
+`HOW_TO_PUBLISH_ON_STEAM.md` name the two offered languages.
+
+PR #11 (`feat/zooworkers-observation-log` at `96e7bbb`, review only, nothing changed):
+qa-playtest's verdict is **approve with fixes**. Its run: `validate` exit 0 (1063 tests, 86
+files); 13 related Vitest files 190/190; six related E2E specs 47/47 and `observation.spec` ×5
+25/25 at 4 workers; the full suite at 4 workers 378/382, the 4 being `release-transformation`
+timeouts while creating a page, on all four workers at once (3/3 on repeat; no PR file on their
+path). Rendered in pt-BR at 1280×720 and 320×420, with high contrast and reduced motion: a team
+decision is recorded as "Equipe" with its room and survives a reload; the welcome-back link
+fits. Required before merge: F1, the "Não observado" stamp runs 17–20 px past its `6.4em`
+column, under the redaction bar, at 800 px and wider (`observation.css:87`, `:109`; the E2E
+cut-off check compares only each element's own scroll width); F2, focus falls to `<body>` when
+a report opened from the welcome back closes, because the note hides under any popup
+(`Notifications.tsx:58`, `PopupShell.tsx:63-64`). Optional: scroll keys need one Tab first
+(`ObservationReport.tsx:250`); rows pass under the tape strip at 320×420; the subtitle does not
+fit "Você decidiu" rows.
+
+Found, not changed (outside this phase): the helper tooltip says "after a minute" while
+`roomPlay.ts:102` frees a machine after 45 s; stale comments in `rooms.ts:3` ("Eighteen") and
+`employees.ts:3` ("Six"); the English room names mix capitalisation.
+
+Checks: `npm run validate` exit 0 (typecheck; lint, 0 warnings; i18n, 0 errors and the 10
+draft warnings; assets; 1072 tests in 85 files; build). `tests/languageChoice.test.ts` and
+`tests/e2e/settings-language.spec.ts` (5/5; on `9f5ef83` the German system and the old draft save fail, opening in `de`). Rendered
+Settings in pt-BR at 320×420 and 1280×720 inspected: "Idioma do jogo · Português (Brasil)"
+reads in full inside the window, no sideways scroll. Six checks for the language setting —
+see, understand, interact, feedback, why it matters, feel: PASS. Full E2E at 4 workers
+(`npm run test:e2e -- --workers=4`), on the way to the final tree: 381/382 (the gift test,
+before item 4), 382/382, then 381/382: the Esc-pause test, then still on a running clock,
+stalled after opening the Archive (no frame drawn and no answer to Playwright for its last
+10 s; closing the page took 35 s). Its cause is not proven; that test now holds its clock like
+the others (50/50 at 4 workers). Final tree: 382/382 twice (7.6 and 7.2 min). CI: no run on
+this branch (`ci.yml` runs on pull requests and pushes to `main`;
+this branch has no PR yet); PR #9's E2E job at `9f5ef83` passed (run 39267621652).
+
 ## Blockers
+
+- USER DECISION: the language menu hides the ten draft languages (implemented, recommended) or
+  lists them labelled as partial. Either way the system language picks only English or pt-BR.
+- PR #11 needs F1 (the stamp under the redaction bar) and F2 (focus after the welcome back's
+  report) before it merges (Phase 2 record); not changed in Phase 2, by instruction.
 
 - Kiro Web listed no skills this session; `zooworkers-playtest/SKILL.md` was followed by hand.
 - `templates/AGENTS.md` may load as a nested second AGENTS.md (Kiro docs); kept as instructed.
@@ -1003,3 +1126,5 @@ on the human checks below (audio, physical touch, native Windows/DPI). PR #9 is 
 Release verification on this branch: the human checks under Blockers (audio, a physical
 touchscreen, native Windows packaging and 100–200% DPI), then the merge of PR #9 when the user
 decides. Read CI's E2E job on the pushed commit first; `main` has none of this configuration.
+Phase 2: the user's language-menu decision, then the Phase 2 PR's CI E2E job once the user
+opens it; the order in which the stacked PRs land is the user's call.

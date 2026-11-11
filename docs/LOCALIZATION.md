@@ -1,20 +1,25 @@
 # Localization Guide
 
-The game ships with complete **English** and **Brazilian Portuguese**, plus draft
-files for Spanish, French, German, Italian, Polish, Russian, Japanese, Korean,
-Simplified Chinese, and Traditional Chinese. Draft locales translate metadata and
-key UI strings and **fall back to English** for everything else.
+The game ships with complete **English** and **Brazilian Portuguese**, and offers only
+those two. Draft files for Spanish, French, German, Italian, Polish, Russian, Japanese,
+Korean, Simplified Chinese, and Traditional Chinese stay in the repository for
+translators: they translate metadata and a few key UI strings (24 of about 4,400 keys)
+and **fall back to English** for everything else, so the game does not offer them until
+they are complete.
 
 ## How it works
 
-- Powered by **i18next** + **react-i18next** with a browser language detector
-  (`src/i18n/index.ts`).
+- Powered by **i18next** + **react-i18next** (`src/i18n/index.ts`).
 - `fallbackLng: 'en'`, `load: 'currentOnly'` so region tags like `pt-BR` are kept.
 - Every user-facing string is a key. There is **no hardcoded text** in gameplay
   components. Numbers/dates are formatted with `Intl` (locale-aware); pluralization
   uses i18next's plural rules.
-- Language auto-detects on first run; the player can switch instantly in
-  **Settings → Language**, and the choice persists (`localStorage: wmno.lang`).
+- **Settings → Language** lists the complete languages (`_meta.complete: true`); the
+  player can switch instantly, and the choice persists in the save and in
+  `localStorage: wmno.lang`.
+- At start (`pickLanguage`): the player's choice when it is offered, else the first
+  complete language among the system's (any Portuguese → pt-BR), else English. A choice
+  of a language that is not offered falls through the same way.
 
 ## Files
 
@@ -31,7 +36,8 @@ Each file starts with `_meta`:
 { "_meta": { "name": "Español", "complete": false, "note": "Draft / machine-assisted." } }
 ```
 
-Set `complete: true` only when the file has every English key.
+Set `complete: true` only when the file has every English key: that flag is what puts a
+language in Settings and lets the system language pick it.
 
 ## Dialogue
 
@@ -58,7 +64,8 @@ surfaced by the checker rather than crashing the UI.
 
 1. Copy `en.json` to `src/i18n/locales/<lang>.json` and translate.
 2. Import and register it in `src/i18n/index.ts` (`resources` + `SUPPORTED_LANGUAGES`).
-3. Set `_meta.complete` appropriately.
+3. Leave `_meta.complete` false until every key is translated and reviewed; then set it
+   to true to offer the language.
 4. Run `npm run check:i18n`.
 
 ## pt-BR glossary

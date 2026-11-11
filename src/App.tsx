@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { matchLanguage } from './i18n';
 import {
   useStore,
   startGameLoop,
@@ -135,14 +136,17 @@ export function App() {
   // Keep i18n and the save in agreement on boot. A brand-new company has not
   // chosen a language (the schema default is 'en'), so the detected one wins
   // there — the player's last pick (wmno.lang), then the system language — and is
-  // recorded; otherwise the saved choice is applied.
+  // recorded; otherwise the saved choice is applied when Settings offers it. A
+  // saved language it no longer offers (a draft) keeps the language picked at
+  // boot, and the save keeps the choice for when that translation is complete.
   useEffect(() => {
     const saved = state.settings.language;
     const detected = i18n.resolvedLanguage;
+    const wanted = matchLanguage(saved);
     if (BOOT_SAVE_IS_NEW && detected && detected !== saved) {
       engine.updateSettings({ language: detected });
-    } else if (saved && i18n.language !== saved) {
-      void i18n.changeLanguage(saved);
+    } else if (wanted && i18n.resolvedLanguage !== wanted) {
+      void i18n.changeLanguage(wanted);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

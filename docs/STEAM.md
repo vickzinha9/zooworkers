@@ -54,7 +54,7 @@ that directory.
 - One squirrel, a growing animal team, and a nut empire that runs while you work.
 - Automation, prestige branches, collections, daily challenges, and funny events.
 - Optional supportive Focus companion. No ads, no microtransactions, fully offline.
-- Shareable Moment Cards and Photo Mode. 12 languages (EN/PT-BR complete at launch).
+- Shareable Moment Cards and Photo Mode. In English and Brazilian Portuguese.
 
 ## Suggested system requirements
 
