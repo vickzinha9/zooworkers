@@ -914,8 +914,8 @@ complete languages (`_meta.complete`), English and Português (Brasil); start pi
 choice when it is offered, else the first complete system language (any Portuguese → pt-BR),
 else English; a save or `wmno.lang` naming a draft opens in a complete language and the save
 keeps its value. The draft files stay. `i18next-browser-languagedetector` is no longer imported
-(still in `package.json`). Hiding the drafts, not labelling them partial, is the recommended
-option and awaits the user's decision (Blockers).
+(still in `package.json`). Hiding the drafts rather than labelling them partial was the
+recommended option, and the user chose it (2026-11-11).
 
 E2E reliability. Each named spec ran 50 times per row (`--repeat-each=50`); failed runs:
 
@@ -1012,8 +1012,6 @@ this branch has no PR yet); PR #9's E2E job at `9f5ef83` passed (run 39267621652
 
 ## Blockers
 
-- USER DECISION: the language menu hides the ten draft languages (implemented, recommended) or
-  lists them labelled as partial. Either way the system language picks only English or pt-BR.
 - PR #11 needs F1 (the stamp under the redaction bar) and F2 (focus after the welcome back's
   report) before it merges (Phase 2 record); not changed in Phase 2, by instruction.
 
@@ -1126,5 +1124,5 @@ this branch has no PR yet); PR #9's E2E job at `9f5ef83` passed (run 39267621652
 Release verification on this branch: the human checks under Blockers (audio, a physical
 touchscreen, native Windows packaging and 100–200% DPI), then the merge of PR #9 when the user
 decides. Read CI's E2E job on the pushed commit first; `main` has none of this configuration.
-Phase 2: the user's language-menu decision, then the Phase 2 PR's CI E2E job once the user
-opens it; the order in which the stacked PRs land is the user's call.
+Phase 2: read the Phase 2 PR's CI E2E job once the user opens it; the order in which the
+stacked PRs land is the user's call.
