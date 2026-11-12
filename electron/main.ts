@@ -780,7 +780,11 @@ function withClocks<T>(call: (log: SuspendLog, wallMs: number, monoMs: number) =
   if (!suspensions) return null;
   const jumps = suspensions.clockJumps();
   const silences = suspensions.unannounced();
+  const settled = suspensions.closedWithoutResume();
   const result = call(suspensions, Date.now(), performance.now());
+  if (suspensions.closedWithoutResume() !== settled) {
+    log("a suspension's resume never came; main is running again, so it closed it.");
+  }
   if (suspensions.unannounced() !== silences) {
     log('main ran nothing for over a minute: recorded as a suspension nobody announced.');
   }

@@ -50,6 +50,22 @@ export const STALL_MS = 60_000;
 export const CLOCK_SLACK_MS = 5000;
 export const CLOCK_RATE_TOLERANCE = 0.0005;
 
+/**
+ * A 'suspend' whose 'resume' never arrives would stay open, and every later gap would
+ * be paid as sleep until the app restarts. Main closes it itself once it is clearly
+ * running again: after a freeze (the sleep itself), this long of regular beats, and the
+ * sleep ends at the first reading after the freeze (a few seconds late at most, the
+ * safe direction).
+ */
+export const AWAKE_CONFIRM_MS = 2 * HEARTBEAT_MS;
+
+/**
+ * With no freeze at all after a 'suspend' (a sleep called off, or a screen turned off
+ * while the app kept running), main closes the suspension after this long of regular
+ * beats, at that moment: at most this much is paid as sleep.
+ */
+export const RESUME_TIMEOUT_MS = 10 * 60_000;
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -84,6 +100,11 @@ export class SuspendLog {
   private lastRead: { wall: number; mono: number };
   private jumps = 0;
   private silences = 0;
+  private settled = 0;
+  /** Monotonic clock when the open suspension was announced. */
+  private openedMono: number | null = null;
+  /** The first reading after a freeze while a suspension is open (main woke there). */
+  private wokeAt: { wall: number; mono: number } | null = null;
 
   /** Recording starts now: `startWallMs` = Date.now(), `startMonoMs` = performance.now(). */
   constructor(
@@ -103,15 +124,25 @@ export class SuspendLog {
     const last = this.intervals[this.intervals.length - 1];
     if (last && last.end === null) return;
     this.record({ start: wallMs, end: null });
+    this.openedMono = monoMs;
+    this.wokeAt = null;
   }
 
   /**
    * Main's heartbeat, every HEARTBEAT_MS while it runs: both clocks read, so a stretch
-   * in which main ran nothing at all is noticed (see STALL_MS).
+   * in which main ran nothing at all is noticed (see STALL_MS), and a suspension whose
+   * 'resume' never came is closed once main is clearly running again.
    */
   beat(wallMs: number, monoMs: number): void {
     if (!isFiniteNumber(wallMs) || !isFiniteNumber(monoMs)) return;
+    const previous = this.lastRead;
     this.noteSilence(wallMs, monoMs);
+    this.settleOpenSuspension(previous, wallMs, monoMs);
+  }
+
+  /** How many suspensions main closed itself because their 'resume' never came. */
+  closedWithoutResume(): number {
+    return this.settled;
   }
 
   /** powerMonitor 'resume'. One with no open 'suspend' before it is ignored. */
@@ -121,6 +152,8 @@ export class SuspendLog {
     // A wall clock set back during sleep must not make a negative interval (the clock
     // check below then treats it as a jump).
     if (last && last.end === null) last.end = Math.max(last.start, wallMs);
+    this.openedMono = null;
+    this.wokeAt = null;
     this.observe(wallMs, monoMs);
   }
 
@@ -168,6 +201,39 @@ export class SuspendLog {
       // What came before the end of a forgotten suspension can no longer be vouched for.
       this.coveredFrom = Math.max(this.coveredFrom, dropped.end ?? dropped.start);
     }
+  }
+
+  /**
+   * A suspension still open at a beat: was the computer asleep since the last reading
+   * (main ran nothing for over STALL_MS, or the wall clock ran ahead of a monotonic one
+   * that stopped with it)? Then main woke here; after AWAKE_CONFIRM_MS of regular beats
+   * the sleep is closed at that waking. With no freeze at all, it is closed after
+   * RESUME_TIMEOUT_MS of regular beats, at that moment.
+   */
+  private settleOpenSuspension(
+    previous: { wall: number; mono: number },
+    wallMs: number,
+    monoMs: number,
+  ): void {
+    const open = this.intervals[this.intervals.length - 1];
+    if (!open || open.end !== null || this.openedMono === null) return;
+    const monoStep = monoMs - previous.mono;
+    const froze = monoStep > STALL_MS || wallMs - previous.wall - monoStep > CLOCK_SLACK_MS;
+    if (froze) {
+      this.wokeAt = { wall: wallMs, mono: monoMs };
+      return;
+    }
+    let end: number | null = null;
+    if (this.wokeAt) {
+      if (monoMs - this.wokeAt.mono >= AWAKE_CONFIRM_MS) end = this.wokeAt.wall;
+    } else if (monoMs - this.openedMono >= RESUME_TIMEOUT_MS) {
+      end = wallMs;
+    }
+    if (end === null) return;
+    open.end = Math.max(open.start, end);
+    this.openedMono = null;
+    this.wokeAt = null;
+    this.settled += 1;
   }
 
   /** Both clocks read together: a silence is recorded, then the clocks are compared. */

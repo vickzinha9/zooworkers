@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AWAKE_CONFIRM_MS,
   CLOCK_RATE_TOLERANCE,
   CLOCK_SLACK_MS,
   HEARTBEAT_MS,
   MAX_SUSPEND_INTERVALS,
+  RESUME_TIMEOUT_MS,
   STALL_MS,
   SuspendLog,
   suspendedOverlapMs,
@@ -372,5 +374,82 @@ describe('SuspendLog: a wall clock that jumps', () => {
     h.setClock(day * CLOCK_RATE_TOLERANCE);
     expect(h.ask(T, h.now())).toBe(0);
     expect(h.log.clockJumps()).toBe(0);
+  });
+});
+
+describe('SuspendLog: a suspend whose resume never comes', () => {
+  it('closes once main is clearly running again, at the first reading after the sleep', () => {
+    for (const monoCounts of [true, false]) {
+      const h = harness();
+      h.pass(MIN);
+      const start = h.now();
+      h.log.suspend(start, h.mono());
+      h.freeze(30 * MIN, monoCounts); // asleep; no 'resume' is ever delivered
+      h.beat(); // main runs again: the sleep ended by here
+      const woke = h.now();
+      // One beat is not yet "clearly running": the sleep still counts up to now.
+      expect(h.ask(start, h.now())).toBe(h.now() - start);
+      h.pass(AWAKE_CONFIRM_MS);
+      expect(h.log.closedWithoutResume()).toBe(1);
+      expect(h.log.snapshot().at(-1)).toEqual({ start, end: woke });
+      // Later play is open time again, not paid as sleep until the app restarts.
+      h.pass(20 * MIN);
+      expect(h.ask(woke, h.now())).toBe(0);
+      expect(h.ask(start, h.now())).toBe(woke - start);
+      expect(h.log.clockJumps()).toBe(0);
+    }
+  });
+
+  it('a later sleep after the closed one is recorded on its own', () => {
+    const h = harness();
+    h.pass(MIN);
+    h.log.suspend(h.now(), h.mono());
+    h.freeze(10 * MIN);
+    h.beat();
+    h.pass(AWAKE_CONFIRM_MS + MIN);
+    const after = h.now();
+    h.sleep(5 * MIN, true);
+    h.pass(MIN);
+    expect(h.ask(after, h.now())).toBe(5 * MIN);
+    expect(h.log.closedWithoutResume()).toBe(1);
+  });
+
+  it('a sleep called off (main never froze) closes after RESUME_TIMEOUT_MS, at that moment', () => {
+    const h = harness();
+    h.pass(MIN);
+    const start = h.now();
+    h.log.suspend(start, h.mono());
+    h.pass(RESUME_TIMEOUT_MS - HEARTBEAT_MS);
+    expect(h.log.closedWithoutResume()).toBe(0);
+    h.pass(HEARTBEAT_MS);
+    expect(h.log.closedWithoutResume()).toBe(1);
+    const closed = h.now();
+    expect(h.log.snapshot().at(-1)).toEqual({ start, end: closed });
+    h.pass(30 * MIN);
+    expect(h.ask(closed, h.now())).toBe(0);
+    expect(h.ask(start, h.now())).toBe(RESUME_TIMEOUT_MS);
+  });
+
+  it('a resume that does come still ends the sleep where it says, and is counted once', () => {
+    const h = harness();
+    h.pass(MIN);
+    const start = h.now();
+    h.log.suspend(start, h.mono());
+    h.freeze(8 * MIN);
+    h.beat();
+    h.log.resume(h.now(), h.mono());
+    h.pass(AWAKE_CONFIRM_MS + MIN);
+    expect(h.log.closedWithoutResume()).toBe(0);
+    expect(h.ask(start, h.now())).toBe(8 * MIN);
+    // A late resume after main closed the sleep itself changes nothing.
+    const g = harness();
+    g.pass(MIN);
+    g.log.suspend(g.now(), g.mono());
+    g.freeze(8 * MIN);
+    g.beat();
+    g.pass(AWAKE_CONFIRM_MS);
+    const before = g.log.snapshot();
+    g.log.resume(g.now(), g.mono());
+    expect(g.log.snapshot()).toEqual(before);
   });
 });
