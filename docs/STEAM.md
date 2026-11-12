@@ -25,17 +25,11 @@ run.
 
 ## Achievement API id mapping
 
-Internal ids map to Steamworks ids in `STEAM_ACHIEVEMENT_IDS`. Configure matching
-ids on the Steamworks partner site. Starter mapping (extend to all 41):
-
-| Internal         | Steam id                  |
-| ---------------- | ------------------------- |
-| first-day        | ACH_FIRST_DAY             |
-| working-nuts-off | ACH_WORKING_NUTS_OFF      |
-| going-nuts       | ACH_GOING_COMPLETELY_NUTS |
-| nice             | ACH_NICE                  |
-| one-nutillion    | ACH_ONE_NUTILLION         |
-| full-staff       | ACH_FULL_STAFF            |
+Every one of the game's 44 achievements maps to a Steamworks API name in
+`STEAM_ACHIEVEMENT_IDS` (`src/platform/achievements.ts`): `ACH_` plus its id in capitals, except
+six named by hand earlier (`ACH_FIRST_DAY`, `ACH_GOING_COMPLETELY_NUTS`, ...). The full table, with
+each name and description in English and Brazilian Portuguese, is generated into
+[`STEAM_ACHIEVEMENTS.md`](STEAM_ACHIEVEMENTS.md) for entering on the partner site.
 
 ## Recommended Steam Cloud save paths
 
