@@ -12,7 +12,9 @@ quiet ambient play. Leaving it open must remain a rewarding intended use case.
 
 ## Continue the real project
 
-Repository: contatoleonardoorrutia-oss/claude.
+Repository: vickzinha9/zooworkers (https://github.com/vickzinha9/zooworkers).
+The older contatoleonardoorrutia-oss/claude and lulinha143/claude URLs only
+redirect there; never push to them, fork or change origin.
 Delivery branch: feat/zooworkers-3.0-facility-pass.
 Use the current checkout and current branch history, not an older snapshot.
 Read git status, branch, recent relevant commits and docs/ZOOWORKERS_STATE.md

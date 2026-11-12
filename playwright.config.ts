@@ -7,6 +7,8 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: true,
   retries: 0,
+  // Windows only: keeps the run's own browsers and workers off power throttling.
+  globalSetup: './tests/e2e/support/globalSetup.ts',
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:4173',

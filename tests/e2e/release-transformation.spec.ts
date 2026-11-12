@@ -5,6 +5,13 @@ import { ROOMS } from '../../src/content/rooms';
 import { GAME_EVENTS } from '../../src/content/events';
 import { openView, arrangeToggle } from './support/shell';
 
+// Every test here opens a mature company, an office of about 2,900 elements. The trace's
+// DOM snapshot of that page at every action made them 3–4 times slower (this spec ×5 at 4
+// workers: 10 of 40 timed out with snapshots, 0 of 40 without). A failure here still keeps
+// its trace: the actions, timings, console, network and screenshots, without the
+// per-action DOM snapshots.
+test.use({ trace: { mode: 'retain-on-failure', snapshots: false } });
+
 test('a favourite gift is found by giving it, and the employee remains visitable during a break', async ({
   page,
 }) => {

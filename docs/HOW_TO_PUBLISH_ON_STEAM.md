@@ -35,8 +35,8 @@ Have these ready (write them in a document):
   generated in code (see `assets/audio/LICENSES.md`, `docs/ASSET_REPLACEMENT.md`).
 - Privacy info (see `PRIVACY.md` — no tracking, offline, no ads).
 - System requirements (see the suggested list in `docs/STEAM.md`).
-- Supported languages (English + Brazilian Portuguese are complete; others are
-  drafts — say so honestly).
+- Supported languages: English and Brazilian Portuguese, the only languages the game
+  offers (the draft locale files are not offered until complete).
 - Save location (Windows: `%APPDATA%\zooworkers\`).
 - Version number (start at `1.0.0`).
 - A support email.

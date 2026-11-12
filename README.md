@@ -98,10 +98,12 @@ are no dead buttons or `TODO` placeholders in core systems.
   slice reliably buildable and hackable. The boundary (`src/art`) is designed so a
   PixiJS/sprite renderer can be dropped in without touching gameplay. See
   [`docs/ASSET_REPLACEMENT.md`](docs/ASSET_REPLACEMENT.md).
-- **Draft locales** (es, fr, de, it, pl, ru, ja, ko, zh-CN, zh-TW) ship translated
-  metadata + key UI strings and **fall back to English** for the rest, exactly as
-  the brief allows. Every user-facing string is a localization key — nothing is
-  hardcoded. `npm run check:i18n` reports coverage.
+- **Draft locales** (es, fr, de, it, pl, ru, ja, ko, zh-CN, zh-TW) translate metadata
+  and a few key UI strings and **fall back to English** for the rest. They stay in
+  the repository for translators, but the game offers only its complete languages
+  (English and Brazilian Portuguese) and never picks a draft from the system
+  language. Every user-facing string is a localization key — nothing is hardcoded.
+  `npm run check:i18n` reports coverage.
 - **Playwright** runs in CI (`ubuntu-latest` with `--with-deps`). Some minimal
   sandboxes lack the system libraries Chromium needs (`libnspr4.so`, …); install
   them via your package manager or run the e2e suite in CI.

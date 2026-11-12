@@ -54,8 +54,8 @@ async function bootstrap() {
     setSuspendOracle((fromMs, toMs) => platform.getSuspendedMs(fromMs, toMs));
   }
 
-  // Prefer the language saved in the game state; i18next detector handles the
-  // rest (localStorage → navigator → 'en').
+  // Prefer the language saved in the game state; `pickLanguage` handles the rest
+  // (the last pick in `wmno.lang` → a complete system language → 'en').
   const saved = getGameState().settings.language;
   await initI18n(saved && saved !== 'en' ? saved : undefined);
 
