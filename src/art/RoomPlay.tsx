@@ -9,6 +9,7 @@ import type { ClickStationDef } from '../content/clickStations';
 import { NUTS_BY_ID } from '../content/nuts';
 import {
   ODDITIES_BY_ID,
+  ROOM_PLAY,
   ROOM_ROUTINES,
   type OddityAnchor,
   type OddityDef,
@@ -71,7 +72,7 @@ function routineLines(
       )
       .join(', ');
     lines.push(t('play.helpers.title', { names }));
-    if (view.kind !== 'tune') lines.push(t(`play.helpers.${view.kind}`));
+    if (view.kind !== 'tune') lines.push(t(`play.helpers.${view.kind}`, { seconds: ROOM_PLAY.selfFixSeconds }));
   } else if (view.kind !== 'tune') {
     lines.push(t(`play.helpers.none.${view.kind}`));
   }
