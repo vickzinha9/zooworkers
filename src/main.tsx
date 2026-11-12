@@ -45,8 +45,8 @@ async function bootstrap() {
   // Keep the browser/Electron window title in sync with the central brand.
   if (typeof document !== 'undefined') document.title = GAME_TITLE;
 
-  // Prefer the language saved in the game state; i18next detector handles the
-  // rest (localStorage → navigator → 'en').
+  // Prefer the language saved in the game state; `pickLanguage` handles the rest
+  // (the last pick in `wmno.lang` → a complete system language → 'en').
   const saved = getGameState().settings.language;
   await initI18n(saved && saved !== 'en' ? saved : undefined);
 

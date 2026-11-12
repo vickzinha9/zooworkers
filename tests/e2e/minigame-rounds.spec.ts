@@ -2,9 +2,10 @@ import { test, expect, type Page } from '@playwright/test';
 import { MICRO_CALIBRATION } from '../../src/sim/minigames';
 import { openView } from './support/shell';
 
-// Chapter 5: the three games as a player meets them. Every round here runs on a
-// fixed fake clock, which also fixes the round's seed (taken from the clock when a
-// game is opened), so each round is the same round every run.
+// Chapter 5: the three games as a player meets them. `start` stops the fake clock at a
+// fixed moment before it opens a game, so the round's seed (taken from the clock when a
+// game is opened) is the same every run, and the round moves only as far as the test
+// runs it, however busy the machine: each round is the same round every run.
 
 const SAVE = {
   version: 7,
@@ -51,8 +52,24 @@ async function boot(page: Page, viewport = { width: 1280, height: 800 }) {
   await expect(page.locator('.microgame-menu')).toBeVisible();
 }
 
+/**
+ * Where `start` stops the clock: a minute after T0, well after the office has loaded
+ * (`pauseAt` only moves forward), so every held round opens at the same moment.
+ */
+const HOLD_AT = T0.getTime() + 60_000;
+
+/**
+ * Opens a game and plays its countdown, first stopping the page clock at HOLD_AT: the
+ * installed clock otherwise also runs in real time between steps, so the seed depended on
+ * how long the office took to load, and on a busy machine the round moved on between two
+ * steps (a pest came up, an order rolled over, the round ended early). From here on, what
+ * the game draws on its next frame needs the test to run the clock a frame.
+ */
 async function start(page: Page, card: string) {
+  await page.clock.pauseAt(HOLD_AT);
   await page.locator(`.micro-card--${card}`).click();
+  // The intro focuses Start on its next frame.
+  await page.clock.runFor(50);
   await expect(page.locator('.microgame')).toHaveAttribute('data-phase', 'intro');
   await expect(page.locator('.microgame__start')).toBeFocused();
   await page.locator('.microgame__start').click();
@@ -77,6 +94,56 @@ const tapFirst = (page: Page, selector: string) =>
     );
     return element !== null;
   }, selector);
+
+/**
+ * Catch what the ticket still asks for, as the game asks a player to ("an espresso the
+ * order needs is worth leaving a mug for"): a falling drop of a kind the order still
+ * needs, else any drop but the decaf. Found and clicked in one instant, like `tapFirst`.
+ * Tapping whatever came first left the order to render timing: when the fast, rarer
+ * espresso was the missing drink, a run could catch mugs until the shift ran out.
+ */
+const tapForTicket = (page: Page) =>
+  page.evaluate(() => {
+    const needed = Array.from(
+      document.querySelectorAll('.coffee__order-item:not(.is-filled) .drink'),
+      (art) => Array.from(art.classList).find((name) => name.startsWith('drink--')),
+    ).map((name) => name?.replace('drink--', 'coffee__drop--'));
+    const drops = Array.from(
+      document.querySelectorAll('.coffee__drop--tap:not(.coffee__drop--decaf)'),
+    );
+    const target =
+      drops.find((drop) => needed.some((kind) => kind && drop.classList.contains(kind))) ??
+      drops[0];
+    target?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }),
+    );
+    return target !== undefined;
+  });
+
+/**
+ * One Bug Squash step, read and played in one instant: the desk as it stands, then the
+ * first pest squashed, unless a feature is up and the score can pay for it (the test
+ * squashes that one itself). One browser round trip instead of the six separate reads
+ * and the tap that made a whole shift cost 12 s on an idle machine.
+ */
+const deskStep = (page: Page) =>
+  page.evaluate(() => {
+    const desk = {
+      up: document.querySelectorAll('.burrow.is-up').length,
+      banner: document.querySelector('.micro-banner')?.textContent ?? null,
+      featureUp: document.querySelector('.burrow.is-up.burrow--feature') !== null,
+      score: Number(document.querySelector('.microgame__score b')?.textContent),
+    };
+    if (!(desk.featureUp && desk.score >= 4)) {
+      document
+        .querySelector('.burrow.is-up:not(.burrow--feature)')
+        ?.dispatchEvent(
+          new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }),
+        );
+    }
+    return desk;
+  });
+
 const mugLeft = (page: Page) =>
   page.locator('.coffee__mug').evaluate((el) => parseFloat((el as HTMLElement).style.left));
 
@@ -118,7 +185,7 @@ test.describe('Chapter 5 minigame rounds', () => {
     let served = false;
     for (let step = 0; step < 120 && !served; step += 1) {
       await page.clock.runFor(150);
-      await tapFirst(page, '.coffee__drop--tap:not(.coffee__drop--decaf)');
+      await tapForTicket(page);
       served = (await page.locator('.coffee__order-stamp').count()) > 0;
     }
     expect(served, 'no order was ever served').toBe(true);
@@ -134,6 +201,8 @@ test.describe('Chapter 5 minigame rounds', () => {
     page,
   }) => {
     await boot(page);
+    // The squash brings the next pest forward to ~540 ms later; on the held clock the
+    // drawer chosen as empty stays empty until its key lands, 100 ms of play on.
     await start(page, 'bugSquash');
     await page.clock.runFor(600);
     const up = page.locator('.burrow.is-up');
@@ -164,21 +233,17 @@ test.describe('Chapter 5 minigame rounds', () => {
     let featureTapped = false;
     for (let step = 0; step < 320 && !featureTapped; step += 1) {
       await page.clock.runFor(80);
-      const ups = await page.locator('.burrow.is-up').count();
-      maxUp = Math.max(maxUp, ups);
-      if (
-        !sawPeak &&
-        (await banner.count()) &&
-        (await banner.textContent())?.includes('Peak hour')
-      ) {
+      const desk = await deskStep(page);
+      maxUp = Math.max(maxUp, desk.up);
+      if (!sawPeak && desk.banner?.includes('Peak hour')) {
         sawPeak = true;
         // The announcement never covers a drawer: it rides over the status row.
         const over = (await banner.boundingBox())!;
         const grid = (await page.locator('.bugsquash__grid').boundingBox())!;
         expect(over.y + over.height).toBeLessThanOrEqual(grid.y);
       }
-      const feature = page.locator('.burrow.is-up.burrow--feature').first();
-      if ((await feature.count()) && (await score(page)) >= 4) {
+      if (desk.featureUp && desk.score >= 4) {
+        const feature = page.locator('.burrow.is-up.burrow--feature').first();
         const before = await score(page);
         await feature.dispatchEvent('pointerdown', {
           isPrimary: true,
@@ -191,7 +256,6 @@ test.describe('Chapter 5 minigame rounds', () => {
         featureTapped = true;
         break;
       }
-      await tapFirst(page, '.burrow.is-up:not(.burrow--feature)');
     }
     expect(sawPeak, 'the second shift was never announced').toBe(true);
     expect(featureTapped, 'no feature turned up to test').toBe(true);
@@ -259,6 +323,8 @@ test.describe('Chapter 5 minigame rounds', () => {
     await expect(page.locator('.microgame__timer')).toHaveText(timer!);
     await page.keyboard.press('Escape');
     await expect(page.locator('.microgame__paused')).toHaveCount(0);
+    // Resume hands focus back to the counter on the next frame.
+    await page.clock.runFor(50);
     await expect(page.locator('.coffee__area')).toBeFocused();
     await page.keyboard.press('Escape');
     await page.locator('.microgame__paused .ghost-btn').click();
@@ -305,7 +371,9 @@ test.describe('Chapter 5 minigame rounds', () => {
     test.setTimeout(90_000);
     await boot(page, { width: 320, height: 420 });
     await start(page, 'bugSquash');
-    for (let step = 0; step < 400; step += 1) {
+    // Tap every pest to the whistle: the held clock moves only these 70 ms steps.
+    const steps = Math.ceil((MICRO_CALIBRATION.bugSquash.duration * 1000) / 70) + 20;
+    for (let step = 0; step < steps; step += 1) {
       await page.clock.runFor(70);
       if ((await page.locator('.microgame').getAttribute('data-phase')) !== 'play') break;
       await tapFirst(page, '.burrow.is-up:not(.burrow--feature)');
