@@ -40,6 +40,82 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+/** Frames to wait for an opener that was put away under the popup to come back. */
+const RETURN_FOCUS_FRAMES = 12;
+
+/**
+ * Gives the keyboard back to what opened the popup. An opener can be put away
+ * while the popup is up (the welcome back hides under any popup) and come back
+ * as a new element when it closes: `data-focus-return` names it, so its new self
+ * is found. Only while nothing else has taken the keyboard (a chained popup or a
+ * room the popup sent the player to keeps it).
+ */
+function returnFocus(target: HTMLElement | null) {
+  if (!target) return;
+  if (target.isConnected) target.focus({ preventScroll: true });
+  if (document.activeElement === target) return;
+  const key = target.dataset.focusReturn;
+  if (!key) return;
+  const lost = () => !document.activeElement || document.activeElement === document.body;
+  let frames = 0;
+  const retry = () => {
+    if (!lost()) return;
+    const again = target.isConnected
+      ? target
+      : document.querySelector<HTMLElement>(`[data-focus-return="${key}"]`);
+    if (again && again.getClientRects().length > 0) {
+      again.focus({ preventScroll: true });
+      return;
+    }
+    frames += 1;
+    if (frames < RETURN_FOCUS_FRAMES) window.requestAnimationFrame(retry);
+  };
+  window.requestAnimationFrame(retry);
+}
+
+const SCROLL_STEP = 40;
+
+/**
+ * A document opens with the keyboard on the dialog itself (its letterhead in
+ * view), but what scrolls is its content: the reading keys scroll that, as they
+ * would a page, without a Tab first. Returns whether the key was used.
+ */
+function scrollFromDialog(event: KeyboardEvent, popup: HTMLElement): boolean {
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  const scroller = popup.querySelector<HTMLElement>('.popup__content');
+  if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 1) return false;
+  const page = Math.max(SCROLL_STEP, scroller.clientHeight - SCROLL_STEP);
+  let by: number;
+  switch (event.key) {
+    case 'ArrowDown':
+      by = SCROLL_STEP;
+      break;
+    case 'ArrowUp':
+      by = -SCROLL_STEP;
+      break;
+    case 'PageDown':
+      by = page;
+      break;
+    case 'PageUp':
+      by = -page;
+      break;
+    case ' ':
+      by = event.shiftKey ? -page : page;
+      break;
+    case 'Home':
+      by = -scroller.scrollHeight;
+      break;
+    case 'End':
+      by = scroller.scrollHeight;
+      break;
+    default:
+      return false;
+  }
+  event.preventDefault();
+  scroller.scrollTop += by;
+  return true;
+}
+
 /** Shared accessible popup frame styled as a small piece of office stationery. */
 export function PopupShell({
   variant = 'standard',
@@ -75,6 +151,12 @@ export function PopupShell({
       if (event.key === 'Escape' && dismissRef.current) {
         event.preventDefault();
         dismissRef.current();
+        return;
+      }
+      if (
+        document.activeElement === popupRef.current &&
+        scrollFromDialog(event, popupRef.current)
+      ) {
         return;
       }
       if (event.key !== 'Tab') return;
@@ -131,7 +213,7 @@ export function PopupShell({
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', restorePopupFocus);
       window.removeEventListener(INTERACTION_FOCUS_EVENT, restorePopupFocus);
-      previousFocus?.focus({ preventScroll: true });
+      returnFocus(previousFocus);
     };
   }, []);
 

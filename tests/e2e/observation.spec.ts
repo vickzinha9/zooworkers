@@ -294,6 +294,58 @@ test('the welcome back offers no report when nothing is on file', async ({ page 
   await expect(report.locator('.observation__empty')).toContainText(text('observation.emptyTitle'));
 });
 
+test('from the welcome back, the keyboard reads the file and comes back to its link', async ({
+  page,
+}) => {
+  await boot(
+    page,
+    company((s, now) => {
+      busy(s, now);
+      s.lastSaved = now - 2 * HOUR;
+    }),
+    320,
+    420,
+  );
+  const link = page.locator('.return-note__report');
+  await expect(link).toBeVisible();
+  await link.focus();
+  await page.keyboard.press('Enter');
+  const report = page.locator('.observation-popup');
+  await expect(report).toBeVisible();
+  // The note is put away under the file; the file opens at its letterhead.
+  await expect(page.locator('.return-note')).toHaveCount(0);
+  const content = report.locator('.popup__content');
+  const top = () => content.evaluate((el) => el.scrollTop);
+  const atEnd = () =>
+    content.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1);
+  expect(await top()).toBe(0);
+  expect(await atEnd(), 'the file is longer than a corner window').toBe(false);
+
+  // The reading keys scroll the file straight away, as on a page: no Tab first.
+  await page.keyboard.press('PageDown');
+  await expect.poll(top).toBeGreaterThan(0);
+  await page.keyboard.press('End');
+  await expect.poll(atEnd).toBe(true);
+  await page.keyboard.press('Home');
+  await expect.poll(top).toBe(0);
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(top).toBeGreaterThan(0);
+
+  // Closing gives the keyboard back to the link that opened the file: by Escape…
+  await page.keyboard.press('Escape');
+  await expect(report).toHaveCount(0);
+  await expect(link).toBeFocused();
+  // …and by its Close button.
+  await page.keyboard.press('Enter');
+  await expect(report).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await expect(report.locator('.popup__actions button')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(report).toHaveCount(0);
+  await expect(link).toBeFocused();
+  await expect(page.locator('.return-note')).toBeVisible();
+});
+
 const SIZES: Array<[number, number]> = [
   [320, 420],
   [380, 460],
@@ -340,7 +392,37 @@ test('reads at every window size, with nothing cut off or scrolling sideways', a
           .filter((el) => el.childNodes.length && el.textContent?.trim())
           .map((el) => parseFloat(getComputedStyle(el).fontSize)),
       );
+      // A stamp stays in its own column: never over the words (or the redaction
+      // bar) beside it, never off its line. Every line's words start at one place.
+      const rows = [...popup.querySelectorAll<HTMLElement>('.observation__row')];
+      const stamped = rows.flatMap((row) => {
+        const mark = row.querySelector('.observation__mark')!.getBoundingClientRect();
+        const body = row.querySelector('.observation__body')!.getBoundingClientRect();
+        const line = row.getBoundingClientRect();
+        const found: string[] = [];
+        const over =
+          mark.right > body.left + 0.5 &&
+          mark.left < body.right - 0.5 &&
+          mark.bottom > body.top + 0.5 &&
+          mark.top < body.bottom - 0.5;
+        if (over) found.push(`${row.dataset.stamp}: the stamp runs over the words`);
+        if (mark.left < line.left - 0.5 || mark.right > line.right + 0.5) {
+          found.push(`${row.dataset.stamp}: the stamp leaves its line`);
+        }
+        return found;
+      });
+      const starts = new Set(
+        rows.map((row) =>
+          Math.round(row.querySelector('.observation__body')!.getBoundingClientRect().left),
+        ),
+      );
+      // The file's lines scroll below the strip of tape that holds it on.
+      const tape = popup.querySelector('.popup__tape')!.getBoundingClientRect();
+      const paper = content.getBoundingClientRect();
       return {
+        stamped,
+        starts: starts.size,
+        underTape: tape.bottom - paper.top,
         page: document.documentElement.scrollWidth - window.innerWidth,
         sideways: content.scrollWidth - content.clientWidth,
         rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
@@ -359,6 +441,9 @@ test('reads at every window size, with nothing cut off or scrolling sideways', a
     expect(layout.close.bottom, `${size}: Close stays in the window`).toBeLessThanOrEqual(height);
     expect(layout.close.height, `${size}: Close is a usable target`).toBeGreaterThanOrEqual(30);
     expect(layout.clipped, `${size}: nothing is cut off`).toEqual([]);
+    expect(layout.stamped, `${size}: each stamp stays in its column`).toEqual([]);
+    expect(layout.starts, `${size}: every line's words start at one place`).toBe(1);
+    expect(layout.underTape, `${size}: no line passes under the tape`).toBeLessThanOrEqual(0);
     // Every line but the one on file from an older save leads somewhere.
     expect(layout.goes).toHaveLength(6);
     for (const go of layout.goes) {

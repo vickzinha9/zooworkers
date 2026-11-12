@@ -2850,7 +2850,7 @@
   "observation": {
     "title": "Relatório de observação",
     "kind": "Anotações de campo",
-    "lede": "O que a equipe fez enquanto você olhava para outra janela.",
+    "lede": "Quem decidiu o quê no escritório, e o que a equipe fez enquanto você olhava para outra janela.",
     "stamp": "Uso interno",
     "open": "Relatório de observação",
     "fromReturn": "Ler o relatório de observação",

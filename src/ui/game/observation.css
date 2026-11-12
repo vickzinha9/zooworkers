@@ -6,26 +6,37 @@
    word in a frame, so it reads without its colour; purple only for the rare.
    ========================================================================== */
 @layer game {
+  /* The file scrolls under its strip of tape at no size: the paper's top margin
+     clears the tape (top 7px, 16px tall, tilted), so its lines stop below it. */
   .popup.observation-popup {
     width: min(560px, 100%);
     max-width: min(560px, 100%);
+    padding-top: 27px;
   }
 
+  /* One set of columns for the whole file: the stamps, what happened, the way
+     there. The stamp column is as wide as the widest stamp on the page (never
+     narrower than 6.4em), so a long word ("Não observado") stays in its column
+     instead of running under the next one, and every line starts at the same
+     place on every day. The days, their lists and their lines share it. */
   .observation {
     display: grid;
+    grid-template-columns: minmax(6.4em, max-content) minmax(0, 1fr) auto;
     gap: 10px;
     min-width: 0;
     container-type: inline-size;
   }
+  .observation > * {
+    grid-column: 1 / -1;
+  }
 
   /* ---- the letterhead -------------------------------------------------------- */
-  /* It starts under the strip of tape that holds the file on, never beneath it. */
   .observation__head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: 2px 10px;
-    padding: 10px 0 8px;
+    padding: 3px 0 8px;
     border-bottom: 1.5px dashed var(--paper-line);
   }
   .observation__kind {
@@ -66,7 +77,11 @@
   /* ---- a day of notes ------------------------------------------------------------ */
   .observation__day {
     display: grid;
-    gap: 6px;
+    grid-template-columns: subgrid;
+    gap: 6px 10px;
+  }
+  .observation__day-title {
+    grid-column: 1 / -1;
   }
   .observation__day-title {
     margin: 0;
@@ -77,14 +92,17 @@
   }
   .observation__rows {
     display: grid;
-    gap: 6px;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    gap: 6px 10px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
   .observation__row {
     display: grid;
-    grid-template-columns: 6.4em minmax(0, 1fr) auto;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     align-items: start;
     gap: 4px 10px;
     padding: 7px 9px;
@@ -199,6 +217,23 @@
   .popup__content .observation__foot {
     color: var(--ink-soft);
     font: 600 var(--fs-2xs) / 1.4 var(--font-body);
+  }
+
+  /* A wide page: stamp and time, then what happened, then the way there. A line
+     with no way there (a decision from an older save) gives its words the room. */
+  @container not (max-width: 430px) {
+    .observation__meta {
+      grid-column: 1;
+    }
+    .observation__body {
+      grid-column: 2;
+    }
+    .observation__row:not(:has(> .observation__go)) .observation__body {
+      grid-column: 2 / -1;
+    }
+    .app .observation__go {
+      grid-column: 3;
+    }
   }
 
   /* A narrow page (a corner window): the title takes the whole line under the

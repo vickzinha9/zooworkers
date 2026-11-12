@@ -222,7 +222,14 @@ export function ReturnNote() {
       {/* The whole record of the office, for whoever wants more than the waiting:
           what the team decided on its own, what passed unseen, its moments. */}
       {hasObservations(state) ? (
-        <button type="button" className="return-note__report" onClick={openObservation}>
+        <button
+          type="button"
+          className="return-note__report"
+          // The note hides under the report and comes back as a new button when it
+          // closes; this name lets the report give the keyboard back to it.
+          data-focus-return="return-note-report"
+          onClick={openObservation}
+        >
           <Icon name="company" size={13} />
           <span>{t('observation.fromReturn')}</span>
           <span className="return-note__go-arrow" aria-hidden>

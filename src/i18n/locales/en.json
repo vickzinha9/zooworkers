@@ -2836,7 +2836,7 @@
   "observation": {
     "title": "Observation report",
     "kind": "Field notes",
-    "lede": "What the team did while you were looking at another window.",
+    "lede": "Who decided what in the office, and what the team did while you were looking at another window.",
     "stamp": "Internal use",
     "open": "Observation report",
     "fromReturn": "Read the observation report",
