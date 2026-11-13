@@ -4,6 +4,12 @@ Handoff only: design is in `DESIGN.md`, commands and matrix in `.kiro/steering/q
 
 ## Branch
 
+`feat/zooworkers-1.0-release` (draft PR #14 into `feat/zooworkers-3.0-facility-pass`): the
+release branch. It merges Phase 1 (PR #12, `fb14763`), Phase 2 (PR #13, `19f30ac`) and
+Feature A (PR #11, `96e7bbb`) by merge commits, without changing those branches or PRs, and
+carries the release work (Release record below). Merging PR #14 would also land #11, #12 and
+#13; that order is the user's call.
+
 `feat/zooworkers-3.0-facility-pass`: final integration is the commit that records this entry,
 on top of Chapter 10 (`f2c5b90`), Chapter 8 (`60fdd3c`), Chapter 7 (`4639fa2`), Chapter 6
 (`25ba899`), Chapter 5 (`f4ae64c`), Chapter 3 (`8cbf590`), Chapter 2 (`d6c4d28`), Chapter 9
@@ -1215,10 +1221,44 @@ earlier full run had two `event-setting` boots time out under load; 4/4 alone). 
 in 63 on a `9f5ef83` worktree; no minigame code changed. `npm run build:desktop` exit 0; no
 desktop code changed, and Electron still cannot start here.
 
+### Release record — the 1.0 release branch (in progress)
+
+Integration: `feat/zooworkers-1.0-release` from Phase 1's head, `--no-ff` merges of Phase 2
+(`2770749`; conflicts in this file and one `src/main.tsx` comment, both kept) and PR #11
+(`54afbd2`; this file only). `npm run validate` on the merged tree: exit 0, 1211 tests.
+
+Phase 2, finished here:
+
+- PR #11's QA findings, all five fixed (`fc09ca4`). F1: the report shares one set of columns
+  (subgrid); the stamp column fits the widest stamp (at least 6.4em), so "Não observado"
+  no longer runs under the redaction bar, and every line's words start at one place. F2:
+  `PopupShell` gives focus back to the opener, or to its new self when the opener names
+  itself with `data-focus-return` (the welcome back's link comes back as a new button).
+  F3: the reading keys scroll a document opened on the dialog itself. F4: the paper's top
+  margin clears the tape. F5: the lede names who decided. `observation.spec` gained the
+  checks; on a build of the pre-fix tree they fail (800×600 stamp over the words; 8.5 px under
+  the tape at 320×420; PageDown does not scroll; the link not focused), with the fix 6/6.
+- The helper hint says the real 45 s (`ROOM_PLAY.selfFixSeconds`); room names capitalised
+  one way in EN and pt-BR; stale "Eighteen"/"Six" comments (`bda4f0d`).
+- A 'suspend' whose 'resume' never comes is closed by main's heartbeat: at the first reading
+  after a freeze plus 20 s of regular beats, or after 10 min with no freeze (`654358e`,
+  suspendLog 35/35).
+- `qa-inspect.mjs` fakes the whole desktop bridge (`6aebe8c`).
+- CI: PR #13's run at `19f30ac` passed both jobs (E2E 382/382, 2 workers, 11.3 min). PR #14's
+  run 43284573636 at `82ac4fd` passed both jobs (E2E 15 min 36 s). `npm run validate` at
+  `6aebe8c`: exit 0, 1215 tests in 93 files.
+
+Phase 7, started: all 44 achievements map to Steamworks API names; `docs/STEAM_ACHIEVEMENTS.md`
+is generated from the game data with EN and pt-BR names and descriptions, and a test keeps it
+in sync (`82ac4fd`).
+
+Phases 3–6 and the rest of 7 are in progress with the specialists (performance baseline,
+player-surface audit, pacing harness, audio fixes, store text and test docs).
+
 ## Blockers
 
-- PR #11 needs F1 (the stamp under the redaction bar) and F2 (focus after the welcome back's
-  report) before it merges (Phase 2 record); not changed in Phase 2, by instruction.
+- PR #11's F1 and F2 are fixed on `feat/zooworkers-1.0-release` (Release record), not on PR #11's
+  own branch, which stays at `96e7bbb`. Merging PR #11 alone would land them unfixed.
 
 - Kiro Web listed no skills this session; `zooworkers-playtest/SKILL.md` was followed by hand.
 - `templates/AGENTS.md` may load as a nested second AGENTS.md (Kiro docs); kept as instructed.
