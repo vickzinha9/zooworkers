@@ -58,6 +58,7 @@
     "smoke:recovery": "node scripts/electron-recovery-smoke.mjs",
     "smoke:minimal": "node scripts/electron-minimal-smoke.mjs",
     "smoke:singleinstance": "node scripts/electron-singleinstance-smoke.mjs",
+    "smoke:suspend": "node scripts/electron-suspend-smoke.mjs",
     "verify:packaged": "node scripts/verify-packaged-renderer.mjs",
     "verify:windows:packaged": "node scripts/verify-windows-packaged.mjs",
     "lint": "eslint . --max-warnings 0",

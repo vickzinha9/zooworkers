@@ -609,7 +609,7 @@
       "desc": "Heavily guarded. Faintly glowing."
     },
     "research": {
-      "name": "Human Behavior Observation Room",
+      "name": "Human Behaviour Observation Room",
       "desc": "For science. Definitely just for science."
     },
     "meeting": {
@@ -649,15 +649,15 @@
       "desc": "Six pods. Six clipboards. Please do not tap on the glass."
     },
     "broadcast": {
-      "name": "Radio studio",
+      "name": "Radio Studio",
       "desc": "A cork-lined booth. Someone has left the ON AIR lamp lit since yesterday."
     },
     "repair": {
-      "name": "Repair workshop",
+      "name": "Repair Workshop",
       "desc": "A tiled service bay for things Procurement insists are still perfectly good."
     },
     "conservatory": {
-      "name": "Winter garden",
+      "name": "Winter Garden",
       "desc": "An iron-and-glass annex. The rain inside does not follow the weather outside."
     }
   },
@@ -2455,6 +2455,13 @@
     "close": "Close",
     "closeToTray": "Close button minimizes to tray"
   },
+  "tray": {
+    "show": "Show",
+    "hide": "Hide",
+    "quietMode": "Quiet Mode",
+    "settings": "Settings…",
+    "quit": "Quit"
+  },
   "photo": {
     "save": "Save snapshot",
     "saved": "Saved!",
@@ -2826,6 +2833,41 @@
     },
     "goLabel": "Go there: {{what}} — {{room}}"
   },
+  "observation": {
+    "title": "Observation report",
+    "kind": "Field notes",
+    "lede": "Who decided what in the office, and what the team did while you were looking at another window.",
+    "stamp": "Internal use",
+    "open": "Observation report",
+    "fromReturn": "Read the observation report",
+    "now": "Happening now",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "by": {
+      "team": "Team",
+      "player": "You",
+      "unknown": "Filed"
+    },
+    "stampPassed": "Unobserved",
+    "stampMoment": "Moment",
+    "stampWaiting": "Waiting",
+    "decision": {
+      "team": "The team decided without you: {{choice}}",
+      "player": "You decided: {{choice}}",
+      "unknown": "Decision on file: {{choice}}"
+    },
+    "then": "Then: {{choice}}",
+    "unnamed": "Name not recorded",
+    "passed": "Something rare happened here, and nobody got a proper look.",
+    "momentLine": "{{name}}: “{{line}}”",
+    "waitingWith": "{{name}} is waiting for you to take a look.",
+    "waitingAnon": "It is waiting for you to take a look.",
+    "go": "Go there",
+    "goLabel": "Go to {{room}}",
+    "emptyTitle": "Nothing on file yet this cycle.",
+    "emptyHint": "Leave the office open in a corner: whatever the team decides on its own is written down here.",
+    "foot": "Noted by Nutshell's researchers. Only what was recorded this cycle; a restructure opens a fresh file."
+  },
   "moment": {
     "company": "Company",
     "rarityLabel": "Rarity",
@@ -3143,7 +3185,7 @@
       "Field notes never lie.",
       "The quiet ones notice everything.",
       "Give me a notebook and a good view.",
-      "Behavior studies: today's subject is you.",
+      "Behaviour studies: today's subject is you.",
       "Nature's in the details, even in here."
     ],
     "nino": [
@@ -4150,15 +4192,15 @@
     "selection": "Arrange these pieces in {{room}}. Stored pieces or pieces in another room do not activate the recipe.",
     "allPieces": "Back to the catalogue",
     "broadcast-set": {
-      "name": "Radio studio",
+      "name": "Radio Studio",
       "effect": "Combo window +12%."
     },
     "repair-set": {
-      "name": "Repair workshop",
+      "name": "Repair Workshop",
       "effect": "Production +4%."
     },
     "conservatory-set": {
-      "name": "Winter garden",
+      "name": "Winter Garden",
       "effect": "Target morale +3."
     }
   },
@@ -5856,7 +5898,7 @@
       "close": "{{name}} (close friend)",
       "set": "{{name}} (set)",
       "brew": "Each helper makes it 20% faster (up to two).",
-      "tend": "A helper frees it on their own after a minute.",
+      "tend": "A helper frees it on their own after {{seconds}} seconds.",
       "watch": "With help, it stays on screen 50% longer.",
       "deliver": "With help here, deliveries come more often.",
       "none": {

@@ -11,7 +11,7 @@ It runs three ways from one codebase:
 
 - **Web demo** — plays in any modern browser.
 - **Development mode** — hot-reloading Vite dev server.
-- **Native desktop app** — a frameless, transparent, always-on-top companion
+- **Native desktop app** — a frameless, resizable, always-on-top companion
   packaged with Electron for Windows, Linux, and macOS.
 
 ---
@@ -34,7 +34,7 @@ Other commands:
 | `npm run dev:electron`                    | Build the shell and launch Electron against the dev server.          |
 | `npm run package`                         | Build everything and produce native installers via electron-builder. |
 | `npm run package:win` / `:linux` / `:mac` | Package for a specific platform.                                     |
-| `npm run test`                            | Vitest unit tests (72 tests).                                        |
+| `npm run test`                            | Vitest unit tests.                                                   |
 | `npm run test:e2e`                        | Playwright end-to-end tests.                                         |
 | `npm run lint` / `lint:fix`               | ESLint.                                                              |
 | `npm run typecheck`                       | TypeScript (renderer + electron).                                    |
@@ -46,7 +46,7 @@ Other commands:
 
 ```bash
 npm run dev            # terminal 1: start the renderer dev server
-npm run dev:electron   # terminal 2: launch the transparent desktop window
+npm run dev:electron   # terminal 2: launch the desktop window
 ```
 
 ### Enable the developer balance panel
@@ -60,48 +60,49 @@ reset the save.
 
 ## What's implemented (honest status)
 
-This repository is a **stable, runnable v1.0 foundation / vertical slice**. The
-opening ~30 minutes of gameplay are polished; every visible control works; there
-are no dead buttons or `TODO` placeholders in core systems.
+The whole game is built and in release preparation: `docs/ZOOWORKERS_STATE.md` records each
+chapter and phase with its evidence, and its Blockers list names what still needs a person
+(listening to the audio, native Windows display scaling, sleep and multi-monitor checks) or an
+owner decision (Steam App ID, price, signing, licence).
 
-| Area                                                                                                                           | Status                   |
-| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
-| Deterministic simulation core (framework-independent)                                                                          | ✅ Complete, unit-tested |
-| Nuts, morale, reputation, golden nuts, permanent kernels                                                                       | ✅                       |
-| Clicking, crate collection, automation, trickle production                                                                     | ✅                       |
-| 51 upgrades across 6 categories                                                                                                | ✅                       |
-| 6 employees with passives, outfits, friendship, nicknames, dialogue                                                            | ✅                       |
-| 13 rooms / floors that unlock and stack visually                                                                               | ✅                       |
-| 26 random events incl. 5 multi-step chains                                                                                     | ✅                       |
-| 41 achievements (local, with Steam adapter boundary)                                                                           | ✅                       |
-| 24 collectible fictional nuts                                                                                                  | ✅                       |
-| 32 decorations                                                                                                                 | ✅                       |
-| Prestige ("Go Completely Nuts") with 5 branches + 5-skill tree                                                                 | ✅                       |
-| Focus Harvest (opt-in, supportive, never blocking)                                                                             | ✅                       |
-| 3 micro-games                                                                                                                  | ✅                       |
-| Daily challenges (deterministic, offline, server-free)                                                                         | ✅                       |
-| Moment Cards → save as PNG; Photo Mode                                                                                         | ✅                       |
-| Offline progression (clamped, tamper-safe)                                                                                     | ✅                       |
-| Save system: Zod schema, migrations, rotating backups, recovery, export/import                                                 | ✅                       |
-| Localization: **English + Brazilian Portuguese complete**, 10 draft locales                                                    | ✅                       |
-| Accessibility: reduced motion, high contrast, dyslexia font, colorblind, scaling, etc.                                         | ✅                       |
-| Web Audio synthesized SFX + ambience (no copyrighted assets)                                                                   | ✅                       |
-| Electron shell: frameless/transparent, tray, always-on-top, click-through, corners, scale, hotkey, single-instance, strict CSP | ✅                       |
-| Platform adapters with browser-safe fallbacks                                                                                  | ✅                       |
-| Original SVG art + reusable animation state machine                                                                            | ✅                       |
-| CI (lint/typecheck/test/build), release, and Pages workflows                                                                   | ✅                       |
+| Area                                                                                                                          | Status                   |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Deterministic simulation core (framework-independent)                                                                         | ✅ Complete, unit-tested |
+| Nuts, morale, reputation, golden nuts, permanent kernels                                                                      | ✅                       |
+| Clicking, crate collection, automation, trickle production                                                                    | ✅                       |
+| 63 upgrades across 6 categories                                                                                               | ✅                       |
+| 23 employees, each with a three-part story, gifts, a keepsake, moods and a voice                                              | ✅                       |
+| 21 rooms that unlock up the trunk, each with a station and routine                                                            | ✅                       |
+| 97 office events and incidents, some with follow-up steps                                                                     | ✅                       |
+| 44 achievements (local; each mapped to a Steamworks API name)                                                                 | ✅                       |
+| 24 collectible fictional nuts                                                                                                 | ✅                       |
+| 67 decorations for floors, walls and ceilings, 9 room sets                                                                    | ✅                       |
+| Prestige ("Go Completely Nuts") with 5 branches + 5-skill tree                                                                | ✅                       |
+| Focus Harvest (opt-in, supportive, never blocking)                                                                            | ✅                       |
+| 3 minigames: Coffee Rescue, Bug Squash, Cable Untangle Desk                                                                   | ✅                       |
+| Daily challenges (deterministic, offline, server-free)                                                                        | ✅                       |
+| Moment Cards → save as PNG; Photo Mode                                                                                        | ✅                       |
+| Offline progression (clamped, tamper-safe)                                                                                    | ✅                       |
+| Save system: Zod schema, migrations, rotating backups, recovery, export/import                                                | ✅                       |
+| Localization: **English + Brazilian Portuguese complete**, 10 draft locales                                                   | ✅                       |
+| Accessibility: reduced motion, high contrast, dyslexia font, colorblind, scaling, etc.                                        | ✅                       |
+| Web Audio synthesized SFX + ambience (no copyrighted assets)                                                                  | ✅                       |
+| Electron shell: frameless, resizable, tray, always-on-top, click-through, corners, scale, hotkey, single-instance, strict CSP | ✅                       |
+| Platform adapters with browser-safe fallbacks                                                                                 | ✅                       |
+| Photographic APNG cast at one scale, authored office and decoration art                                                       | ✅                       |
+| CI (lint/typecheck/test/build), release, and Pages workflows                                                                  | ✅                       |
 
 ### Documented tradeoffs & limitations
 
-- **Rendering uses inline SVG + CSS animation** behind a renderer boundary rather
-  than PixiJS. SVG art is itself a brief requirement, and this keeps the vertical
-  slice reliably buildable and hackable. The boundary (`src/art`) is designed so a
-  PixiJS/sprite renderer can be dropped in without touching gameplay. See
-  [`docs/ASSET_REPLACEMENT.md`](docs/ASSET_REPLACEMENT.md).
-- **Draft locales** (es, fr, de, it, pl, ru, ja, ko, zh-CN, zh-TW) ship translated
-  metadata + key UI strings and **fall back to English** for the rest, exactly as
-  the brief allows. Every user-facing string is a localization key — nothing is
-  hardcoded. `npm run check:i18n` reports coverage.
+- **Rendering uses React DOM, CSS and APNG sprites** rather than a canvas or WebGL engine,
+  behind the scene and asset registries in `src/art`, so gameplay never depends on the
+  renderer. See [`docs/ASSET_REPLACEMENT.md`](docs/ASSET_REPLACEMENT.md).
+- **Draft locales** (es, fr, de, it, pl, ru, ja, ko, zh-CN, zh-TW) translate metadata
+  and a few key UI strings and **fall back to English** for the rest. They stay in
+  the repository for translators, but the game offers only its complete languages
+  (English and Brazilian Portuguese) and never picks a draft from the system
+  language. Every user-facing string is a localization key — nothing is hardcoded.
+  `npm run check:i18n` reports coverage.
 - **Playwright** runs in CI (`ubuntu-latest` with `--with-deps`). Some minimal
   sandboxes lack the system libraries Chromium needs (`libnspr4.so`, …); install
   them via your package manager or run the e2e suite in CI.
@@ -122,7 +123,7 @@ src/
   audio/         Web Audio synthesized SFX/ambience
   i18n/          i18next setup + locale JSON
   state/         Zustand store bridging the engine to React + the game loop
-  art/           Original SVG characters/scene + animation state machine
+  art/           Office scene, character registry and sprites, asset registries
   ui/            React views, modals, components
 tests/           Vitest unit tests + Playwright e2e
 docs/            Design, balancing, localization, Steam, release, asset docs
@@ -161,6 +162,8 @@ Moment Cards render entirely from game content and never capture your desktop.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Bundled fonts fall back to safe system fonts; no
-third-party art or audio is shipped. See [`docs/STEAM.md`](docs/STEAM.md) for the
+MIT for this repository — see [`LICENSE`](LICENSE); the licence of the sold build is the
+owner's decision (`docs/STORE_PAGE.md`). The two bundled fonts, DynaPuff and Nunito
+(`@fontsource`), are under the SIL Open Font License 1.1 (`docs/FONTS.md`); the audio is
+synthesized in code. See [`docs/STEAM.md`](docs/STEAM.md) for the
 EULA template (marked for legal review) and [`PRIVACY.md`](PRIVACY.md).

@@ -30,7 +30,7 @@
 
 ## Steam (if applicable)
 
-- [ ] Steamworks achievement ids match `STEAM_ACHIEVEMENT_IDS` (extend to all 41).
+- [ ] Steamworks achievements created as listed in `docs/STEAM_ACHIEVEMENTS.md` (all 44).
 - [ ] Steam Auto-Cloud configured for the userData save path (see `docs/STEAM.md`).
 - [ ] Depot built from `dist/` + `dist-electron/` + packaged binary.
 - [ ] Store page assets, capsule art, and system requirements finalized.

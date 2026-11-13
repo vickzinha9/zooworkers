@@ -6,6 +6,8 @@
 //     desktop bridge. It fails safe when Steam is unavailable so the game runs
 //     normally without Steam. See docs/STEAM.md for the API id mapping.
 
+import { ACHIEVEMENTS } from '../content/achievements';
+
 export interface AchievementAdapter {
   readonly name: string;
   unlock(achievementId: string): void;
@@ -26,9 +28,11 @@ export class LocalAchievements implements AchievementAdapter {
   }
 }
 
-// Steam API ids are conventionally uppercase snake case. This maps our internal
-// ids to the ids configured in the Steamworks partner site.
-export const STEAM_ACHIEVEMENT_IDS: Record<string, string> = {
+// Steam API ids are conventionally uppercase snake case. Every achievement in the
+// game has one, configured on the Steamworks partner site under the same name
+// (docs/STEAM_ACHIEVEMENTS.md lists them all, with their names and descriptions).
+// The first six were named by hand before the rest; they keep their names.
+const NAMED_STEAM_IDS: Record<string, string> = {
   'first-day': 'ACH_FIRST_DAY',
   'working-nuts-off': 'ACH_WORKING_NUTS_OFF',
   'going-nuts': 'ACH_GOING_COMPLETELY_NUTS',
@@ -36,6 +40,16 @@ export const STEAM_ACHIEVEMENT_IDS: Record<string, string> = {
   'one-nutillion': 'ACH_ONE_NUTILLION',
   'full-staff': 'ACH_FULL_STAFF',
 };
+
+/** The Steamworks API name for an internal achievement id. */
+export function steamAchievementId(id: string): string {
+  return NAMED_STEAM_IDS[id] ?? `ACH_${id.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+}
+
+/** Internal id -> Steamworks API name, for every achievement in the game. */
+export const STEAM_ACHIEVEMENT_IDS: Record<string, string> = Object.fromEntries(
+  ACHIEVEMENTS.map((achievement) => [achievement.id, steamAchievementId(achievement.id)]),
+);
 
 export class SteamAchievements implements AchievementAdapter {
   readonly name = 'steam';

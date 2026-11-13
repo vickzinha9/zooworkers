@@ -16,10 +16,21 @@ import {
   IPC,
   IPC_EVENTS,
   DEFAULT_WINDOW_SETTINGS,
+  DEFAULT_TRAY_LABELS,
+  parseTrayLabels,
   type WindowSettings,
   type WindowCorner,
   type PlatformInfo,
+  type TrayLabels,
 } from './ipc';
+import {
+  boundsToRemember,
+  cornerBounds,
+  fitInside,
+  placeWindow,
+  type Rect,
+} from './windowPlacement';
+import { HEARTBEAT_MS, SuspendLog } from './suspendLog';
 
 // ---------------------------------------------------------------------------
 // Startup logging + crash safety.
@@ -182,49 +193,49 @@ function scaledSize(): { width: number; height: number } {
   };
 }
 
-function cornerPosition(corner: WindowCorner): { x: number; y: number } {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const area = display.workArea;
-  const { width, height } = scaledSize();
-  const margin = 16;
-  switch (corner) {
-    case 'top-left':
-      return { x: area.x + margin, y: area.y + margin };
-    case 'top-right':
-      return { x: area.x + area.width - width - margin, y: area.y + margin };
-    case 'bottom-left':
-      return { x: area.x + margin, y: area.y + area.height - height - margin };
-    case 'bottom-right':
-    default:
-      return {
-        x: area.x + area.width - width - margin,
-        y: area.y + area.height - height - margin,
-      };
-  }
-}
+const MIN_SIZE = { width: MIN_WIDTH, height: MIN_HEIGHT };
+const MAX_SIZE = { width: MAX_WIDTH, height: MAX_HEIGHT };
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+/** Copies a window's normal-state bounds into the settings (never minimized ones). */
+function rememberBounds(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  const minimized = win.isMinimized();
+  const maximized = win.isMaximized();
+  // A minimized window does not say whether it will come back maximized: keep the flag.
+  if (!minimized) settings.maximized = maximized;
+  const rect = boundsToRemember({
+    minimized,
+    maximized,
+    fullScreen: win.isFullScreen(),
+    bounds: win.getBounds(),
+    normalBounds: win.getNormalBounds(),
+  });
+  if (!rect) return;
+  settings.x = rect.x;
+  settings.y = rect.y;
+  settings.width = rect.width;
+  settings.height = rect.height;
 }
 
 /**
  * Applies window flags. When `resize` is true (an explicit scale/corner change)
- * the window snaps back to the scaled base size and the remembered free-resize
- * bounds are cleared; otherwise a manual resize is preserved.
+ * the window snaps back to the scaled base size, at the chosen corner of the
+ * display it is on, and those bounds become the remembered ones; otherwise a
+ * manual resize is preserved.
  */
 function applyWindowSettings(resize = false): void {
   if (!mainWindow) return;
   mainWindow.setAlwaysOnTop(settings.alwaysOnTop, 'screen-saver');
   mainWindow.setIgnoreMouseEvents(settings.clickThrough, { forward: true });
   if (resize && !mainWindow.isMaximized()) {
-    settings.width = undefined;
-    settings.height = undefined;
-    const { width, height } = scaledSize();
-    mainWindow.setSize(width, height);
-    if (settings.corner) {
-      const pos = cornerPosition(settings.corner);
-      mainWindow.setPosition(pos.x, pos.y);
-    }
+    const size = scaledSize();
+    const current = mainWindow.getBounds();
+    const area = screen.getDisplayMatching(current).workArea;
+    const target: Rect = settings.corner
+      ? fitInside(cornerBounds(settings.corner, size, area), area, MIN_SIZE)
+      : fitInside({ ...current, ...size }, area, MIN_SIZE);
+    mainWindow.setBounds(target);
+    rememberBounds(mainWindow);
   }
   saveSettings();
 }
@@ -402,24 +413,30 @@ function escapeHtml(s: string): string {
 
 function createWindow(): void {
   loadSettings();
-  // Prefer the player's remembered free-resize bounds; otherwise fall back to
-  // the scaled base size.
-  const scaled = scaledSize();
-  const width = clamp(settings.width ?? scaled.width, MIN_WIDTH, MAX_WIDTH);
-  const height = clamp(settings.height ?? scaled.height, MIN_HEIGHT, MAX_HEIGHT);
-  const pos =
-    settings.corner && settings.width == null ? cornerPosition(settings.corner) : undefined;
+  // Reopen where the window lives: its remembered spot and size while that spot is
+  // still on a connected display, else its corner of the display under the cursor
+  // (at the remembered size), else centred. Never partly off screen.
+  const placement = placeWindow({
+    saved: settings,
+    workAreas: screen.getAllDisplays().map((display) => display.workArea),
+    cursorWorkArea: screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea,
+    defaultSize: scaledSize(),
+    minSize: MIN_SIZE,
+    maxSize: MAX_SIZE,
+  });
+  const placed = placement.bounds;
+  log(`window placement: ${placement.source} ${JSON.stringify(placed)}`);
 
   // Only pass a validated NativeImage; never an undefined/invalid path.
   const appIcon = loadIconImage('icon.png');
 
   mainWindow = new BrowserWindow({
-    width,
-    height,
+    x: placed.x,
+    y: placed.y,
+    width: placed.width,
+    height: placed.height,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
-    x: pos?.x,
-    y: pos?.y,
     show: false, // shown on ready-to-show (with a safety fallback) to avoid a white flash
     frame: !settings.frameless,
     // Opaque, NOT transparent. A transparent frameless window on Windows has
@@ -449,6 +466,18 @@ function createWindow(): void {
     },
   });
   log(`BrowserWindow created (icon=${appIcon ? 'set' : 'default'}).`);
+  // Opening on a monitor whose scale differs from the primary's can come out at the
+  // wrong size or spot; a second, explicit setBounds puts it where it was placed.
+  const created = mainWindow.getBounds();
+  if (
+    created.x !== placed.x ||
+    created.y !== placed.y ||
+    created.width !== placed.width ||
+    created.height !== placed.height
+  ) {
+    log(`window opened at ${JSON.stringify(created)}, not as placed; applying the placement.`);
+    mainWindow.setBounds(placed);
+  }
 
   // Reveal the window once it is ready; a fallback timer guarantees it is never
   // stuck hidden even if 'ready-to-show' doesn't fire.
@@ -545,18 +574,15 @@ function createWindow(): void {
   mainWindow.setIgnoreMouseEvents(settings.clickThrough, { forward: true });
   if (settings.maximized) mainWindow.maximize();
 
-  // Remember free-resize bounds + maximized state (debounced).
+  const thisWindow = mainWindow;
+  // Remember the normal-state position + size and the maximized state (debounced;
+  // flushed on close). A minimized window's parking spot is never saved.
   const persistBounds = () => {
-    if (!mainWindow) return;
     if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
     saveBoundsTimer = setTimeout(() => {
-      if (!mainWindow) return;
-      settings.maximized = mainWindow.isMaximized();
-      if (!settings.maximized) {
-        const b = mainWindow.getBounds();
-        settings.width = b.width;
-        settings.height = b.height;
-      }
+      saveBoundsTimer = null;
+      if (thisWindow.isDestroyed()) return;
+      rememberBounds(thisWindow);
       saveSettings();
     }, 400);
   };
@@ -584,9 +610,15 @@ function createWindow(): void {
   mainWindow.on('focus', () => mainWindow?.webContents.send(IPC_EVENTS.focusChanged, true));
   mainWindow.on('blur', () => mainWindow?.webContents.send(IPC_EVENTS.focusChanged, false));
 
-  const thisWindow = mainWindow;
   mainWindow.on('close', () => {
     log('window close event.');
+    // A move or resize in the last moments before closing is still pending: take
+    // the window's bounds now, while it can still report them.
+    if (saveBoundsTimer) {
+      clearTimeout(saveBoundsTimer);
+      saveBoundsTimer = null;
+    }
+    rememberBounds(thisWindow);
     saveSettings();
   });
 
@@ -661,12 +693,16 @@ function toggleVisibility(): void {
   }
 }
 
+// The tray menu's words: English until the renderer sends the player's language
+// (IPC.setTrayLabels), then rebuilt in that language.
+let trayLabels: TrayLabels = { ...DEFAULT_TRAY_LABELS };
+
 function buildTrayMenu(): Menu {
-  return Menu.buildFromTemplate([
-    { label: 'Show', click: () => mainWindow?.show() },
-    { label: 'Hide', click: () => mainWindow?.hide() },
+  const menu = Menu.buildFromTemplate([
+    { label: trayLabels.show, click: () => mainWindow?.show() },
+    { label: trayLabels.hide, click: () => mainWindow?.hide() },
     {
-      label: 'Quiet Mode',
+      label: trayLabels.quietMode,
       type: 'checkbox',
       checked: settings.quietMode,
       click: (item) => {
@@ -676,10 +712,30 @@ function buildTrayMenu(): Menu {
       },
     },
     { type: 'separator' },
-    { label: 'Settings…', click: () => mainWindow?.webContents.send(IPC_EVENTS.showSettings) },
+    {
+      label: trayLabels.settings,
+      click: () => mainWindow?.webContents.send(IPC_EVENTS.showSettings),
+    },
     { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
+    { label: trayLabels.quit, click: () => app.quit() },
   ]);
+  // Smoke runs read back the menu the tray actually holds (Tray has no getter).
+  if (process.env.WMNO_SMOKE === '1') {
+    (globalThis as { __zwTrayMenu?: Menu }).__zwTrayMenu = menu;
+  }
+  return menu;
+}
+
+function applyTrayLabels(payload: unknown): boolean {
+  const labels = parseTrayLabels(payload);
+  if (!labels) {
+    log('tray labels rejected: not five short plain strings.');
+    return false;
+  }
+  trayLabels = labels;
+  // Before the tray exists the labels just wait; createTray builds with them.
+  if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu());
+  return true;
 }
 
 function createTray(): void {
@@ -708,6 +764,49 @@ function createTray(): void {
 function detectSteamDeck(): boolean {
   // Steam sets this environment variable inside the Deck's game runtime.
   return process.env.SteamDeck === '1' || process.env.SteamOS === '1';
+}
+
+// Real system suspensions (sleep, hibernation), in memory only. The renderer asks how
+// much of a long gap was one, because a minimized window can also go minutes without a
+// timer and that time is not sleep (IPC.getSuspendedMs). Created when recording starts:
+// it answers null for anything earlier.
+let suspensions: SuspendLog | null = null;
+
+/**
+ * Runs a suspend-log call with both clocks, logging a wall-clock jump it notices and a
+ * suspension nobody announced that it records.
+ */
+function withClocks<T>(call: (log: SuspendLog, wallMs: number, monoMs: number) => T): T | null {
+  if (!suspensions) return null;
+  const jumps = suspensions.clockJumps();
+  const silences = suspensions.unannounced();
+  const settled = suspensions.closedWithoutResume();
+  const result = call(suspensions, Date.now(), performance.now());
+  if (suspensions.closedWithoutResume() !== settled) {
+    log("a suspension's resume never came; main is running again, so it closed it.");
+  }
+  if (suspensions.unannounced() !== silences) {
+    log('main ran nothing for over a minute: recorded as a suspension nobody announced.');
+  }
+  if (suspensions.clockJumps() !== jumps) {
+    log(`wall clock jump noticed; suspensions vouched for from ${suspensions.coveredSince()}.`);
+  }
+  return result;
+}
+
+function watchSuspensions(): void {
+  suspensions = new SuspendLog(Date.now(), performance.now());
+  // Windows does not always announce a suspension (Modern Standby can freeze the app
+  // without a 'suspend'); a heartbeat that stops is noticed instead (see STALL_MS).
+  setInterval(() => withClocks((record, wall, mono) => record.beat(wall, mono)), HEARTBEAT_MS);
+  powerMonitor.on('suspend', () => {
+    withClocks((record, wall, mono) => record.suspend(wall, mono));
+    log('system suspend.');
+  });
+  powerMonitor.on('resume', () => {
+    withClocks((record, wall, mono) => record.resume(wall, mono));
+    log('system resume.');
+  });
 }
 
 function registerIpc(): void {
@@ -774,6 +873,21 @@ function registerIpc(): void {
   ipcMain.handle(IPC.quit, () => {
     saveSettings();
     app.quit();
+  });
+
+  ipcMain.handle(IPC.setTrayLabels, (_e, payload: unknown) => applyTrayLabels(payload));
+
+  ipcMain.handle(IPC.getSuspendedMs, (_e, fromMs: unknown, toMs: unknown) => {
+    if (
+      typeof fromMs !== 'number' ||
+      typeof toMs !== 'number' ||
+      !Number.isFinite(fromMs) ||
+      !Number.isFinite(toMs)
+    ) {
+      throw new TypeError('getSuspendedMs takes two finite Date.now() millisecond values.');
+    }
+    // Answered at once, from memory: ms >= 0, or null when the log cannot vouch for it.
+    return withClocks((record, wall, mono) => record.suspendedMs(fromMs, toMs, wall, mono));
   });
 
   ipcMain.handle(IPC.getIdleSeconds, () => {
@@ -911,6 +1025,7 @@ async function initializeApplication(): Promise<void> {
 
   try {
     hardenSession();
+    watchSuspensions();
     registerIpc();
     createWindow(); // create the window FIRST so a later failure can't leave us window-less
     // NOTE: the tray is intentionally NOT created here. It is created only once

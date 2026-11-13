@@ -15,7 +15,7 @@ collectible decoration game. Understandable in seconds; hours of depth.
    reaches the vault at the offline efficiency, and automation raises that until
    nothing waits on the player (`src/sim/crate.ts`).
 2. **Stations** in every room pay per tap and build a combo. Keep the rhythm for
-   10 taps (8 on charge stations) and the room **rushes**: the people working in
+   10 taps (9 on charge stations) and the room **rushes**: the people working in
    it produce double for 30 s, renewed by every tap that keeps the streak. A
    short burst of attention therefore scales with the company, and who works in
    which room matters.
@@ -35,7 +35,10 @@ collectible decoration game. Understandable in seconds; hours of depth.
 Keeping the game open is never worse than closing it: open time is credited in
 full however rarely a hidden window ticks, and a gap long enough to mean the
 computer slept is settled like time away (offline rules, crate filled, finds
-waiting). There are no arbitrary waiting walls.
+waiting). On the desktop app the game asks Windows how much of such a gap the
+computer was really asleep (a suspension Windows announces, or one in which the whole
+app ran nothing for over a minute), so a long minimized stretch is not mistaken for
+sleep; the browser judges by the gap alone. There are no arbitrary waiting walls.
 
 ## Resources
 
@@ -51,11 +54,48 @@ manipulative monetization.
 
 ## Characters
 
-Pip (founder, balanced), Marlow (capybara, HR, morale + calm), Rizzo (raccoon,
-procurement, finds resources), Bea (beaver, construction, cost reduction), Corvus
-(crow, marketing, rare-event chance), Mina (mole, research, reputation). Each has
-a distinct silhouette, personality, animations, a passive, friendship, dialogue,
-a personal story, a favorite item, a rare event, outfits, and a profile.
+Twenty-three teammates (`src/content/employees.ts`; names, roles and blurbs in
+`employee.<id>.*`, animals in `src/art/critterShapes.ts`). Pip founded the company and is
+on staff from the start; everyone else becomes hireable once reputation reaches their line
+and is hired for nuts. The table is in that order.
+
+| Teammate                  | `id`     | Animal    | Role                           | Home department                 | Passive        | Reputation |
+| ------------------------- | -------- | --------- | ------------------------------ | ------------------------------- | -------------- | ---------- |
+| Pip Acornsworth           | `pip`    | squirrel  | Founder & CEO                  | Founder's Desk                  | all production | founder    |
+| Marlow Stillwater         | `marlow` | capybara  | Head of Human Resources        | Coffee & Morale Division        | morale         | 5          |
+| Rizzo “Receipts” Ringtail | `rizzo`  | raccoon   | Procurement Specialist         | Procurement Burrow              | lucky crates   | 15         |
+| Beatrice “Bea” Timberton  | `bea`    | beaver    | Construction Manager           | Construction Wing               | lower costs    | 30         |
+| Corvus Crowley            | `corvus` | crow      | Marketing Director             | Marketing Burrow                | rare events    | 50         |
+| Mina Deepwell             | `mina`   | mole      | Research Engineer              | Human Behavior Observation Room | reputation     | 80         |
+| Nixie Bolt                | `nixie`  | mouse     | Head of Automation & IT        | Shell Research Laboratory       | own output     | 110        |
+| Otto Driftwood            | `otto`   | otter     | Head of Finance                | Procurement Burrow              | lower costs    | 150        |
+| Hazel Quill               | `hazel`  | hedgehog  | Legal & Compliance             | Very Serious Meeting Room       | morale         | 200        |
+| Junie Hopwell             | `junie`  | rabbit    | Logistics & Scheduling         | Nut Sorting Department          | all production | 260        |
+| Moss Moonfeather          | `moss`   | owl       | Night Operations & Observation | Human Behavior Observation Room | reputation     | 330        |
+| Fenn Fenwick              | `fenn`   | fox       | Sales & Client Relations       | Marketing Burrow                | rare events    | 420        |
+| Pingo Frost               | `pingo`  | penguin   | Logistics & Flow               | Nut Sorting Department          | all production | 500        |
+| Canela Embertail          | `canela` | red panda | Field Research                 | Human Behavior Observation Room | reputation     | 560        |
+| Nino Whiskerton           | `nino`   | cat       | Office Manager                 | Very Serious Meeting Room       | morale         | 620        |
+| Bia Bramble               | `bia`    | bear      | Security & Facilities          | Golden Nut Vault                | lower costs    | 680        |
+| Quincy Lilypad            | `quincy` | frog      | Quality & Testing              | Shell Research Laboratory       | lucky crates   | 740        |
+| Sonny Slowbranch          | `dorm`   | sloth     | Wellbeing & Rest               | Employee Nap Chamber            | morale         | 800        |
+| Inky Marlowe              | `inky`   | octopus   | Logistics & Sorting            | Nut Sorting Department          | all production | 870        |
+| Echo Duskwing             | `echo`   | bat       | Night Research                 | Human Behavior Observation Room | reputation     | 940        |
+| Rosa Plume                | `rosa`   | flamingo  | Marketing & Flair              | Marketing Burrow                | rare events    | 1,010      |
+| Perry Billsby             | `perry`  | platypus  | Procurement & Odd Jobs         | Procurement Burrow              | lucky crates   | 1,080      |
+| Axel Frill                | `axel`   | axolotl   | Research & Regeneration        | Shell Research Laboratory       | own output     | 1,150      |
+
+- **Home department:** where a new hire sits when it has a free desk, and where "By
+  department" sends them. No home department has more than four people.
+- **Passives** grow with level: _all production_ adds to every nut produced; _own output_
+  to their own only; _morale_ adds flat morale; _lower costs_ cuts upgrades, rooms, hiring
+  and promotions (all cost cuts together stop at 75%); _rare events_ raises rare-event
+  odds; _reputation_ adds reputation per minute; _lucky crates_ is a chance that a
+  collected crate holds half as much again.
+
+Each has a distinct silhouette, personality, animations, a passive, friendship, dialogue,
+a personal story, a favorite item, a rare event, outfits (a starting one and a special one
+for golden nuts; Pip has two), and a profile.
 
 Animation is driven by a reusable state machine (`src/art/animation.ts`), not
 hardcoded switches.
@@ -93,20 +133,73 @@ so they survive saves, old saves and prestige.
   Each entry keeps what you said beside what they said back. A story is not named
   before it begins, and a keepsake not before you know it.
 
+## Rooms
+
+Twenty-one rooms (`src/content/rooms.ts`; names in `room.<id>.name`). The Founder's Desk
+is always open; seven are built from the Upgrades tab for nuts ("Build: …", list price
+before cost cuts); the rest open on their own when reputation reaches their line. Every
+room has a tap station and a routine (next section) and seats **at most four** teammates.
+
+Each open room is one storey of the trunk, stacked bottom to top in this order (the room's
+`floor`, -1 to 6, then its place in `ROOMS`); the top of the tower shows the locked room
+the company can open soonest.
+
+| Room                            | `id`           | Opens                 | Routine | Kind            |
+| ------------------------------- | -------------- | --------------------- | ------- | --------------- |
+| Suspicious Basement             | `basement`     | built, 3,000,000 nuts | tend    |                 |
+| Founder's Desk                  | `founder-desk` | always                | deliver |                 |
+| Nut Cafeteria                   | `cafeteria`    | reputation 8          | brew    |                 |
+| Nut Sorting Department          | `sorting`      | built, 500 nuts       | tend    |                 |
+| Coffee & Morale Division        | `morale`       | reputation 5          | brew    |                 |
+| Internal Mail Room              | `mailroom`     | built, 4,000 nuts     | deliver |                 |
+| Procurement Burrow              | `procurement`  | reputation 15         | deliver |                 |
+| Construction Wing               | `construction` | reputation 30         | tend    |                 |
+| Security Office                 | `security`     | reputation 45         | watch   | facility        |
+| Radio studio                    | `broadcast`    | reputation 22         | tune    | facility, annex |
+| Shell Research Laboratory       | `lab`          | built, 20,000 nuts    | brew    |                 |
+| Marketing Burrow                | `marketing`    | reputation 50         | tune    |                 |
+| Records Archive                 | `archive`      | built, 400,000 nuts   | watch   | facility        |
+| Repair workshop                 | `repair`       | reputation 65         | tend    | facility, annex |
+| Golden Nut Vault                | `vault`        | built, 150,000 nuts   | tune    |                 |
+| Human Behavior Observation Room | `research`     | reputation 80         | watch   |                 |
+| Behavioural Incubator           | `incubator`    | reputation 300        | brew    | facility        |
+| Very Serious Meeting Room       | `meeting`      | built, 1,000,000 nuts | tune    |                 |
+| Employee Nap Chamber            | `nap`          | reputation 120        | brew    |                 |
+| Winter garden                   | `conservatory` | reputation 145        | brew    | facility, annex |
+| Rooftop Acorn Garden            | `rooftop`      | reputation 200        | watch   |                 |
+
+- **Four to a room** (`ROOM_CAP` in `src/sim/rooms.ts`) holds for assignment, hiring,
+  auto-arrange, loading a save and the scene alike. A full room refuses a move. A new hire
+  takes their home department if it is open and has a desk, otherwise the open room they
+  work best in (then the emptiest). Whenever a room would hold a fifth (an old save, a room
+  opening, an assignment cleared), whoever is only there by default moves to their next
+  best room, and the player is told who moved. "By department" and "Spread evenly" fill
+  against the same count.
+- **Facility rooms** (`src/content/facilityDiscoveries.ts`): six rooms each hold a
+  discovery. It comes forward in the room once two curiosities have been noticed there,
+  once the room's decoration set is complete, or once a game is mastered (Cable Untangle
+  Desk for the Security Office, Bug Squash for the Behavioural Incubator). The player opens
+  it from the room as a rare card, decided once.
+- **Annex rooms** (`src/art/AnnexArchitecture.tsx`): the Radio studio, the Repair workshop
+  and the Winter garden carry architecture of their own (cork panels and the ON AIR lamp;
+  a roll-up bay door and a crane rail; an iron-and-glass roof), and are the only rooms with
+  sounds of their own while in view.
+
 ## The office is the playground
 
 Every room keeps its tap station (the clicker's core verb), and the station also
 carries the room's own routine, shown on the machine as a small tag
 (`src/content/roomPlay.ts`, `src/sim/roomPlay.ts`). Five verbs, each used by a
-handful of rooms with their own words, timing and payoff:
+handful of rooms with their own words, timing and payoff (rooms by short name; full names
+in Rooms above):
 
-| Verb    | What the player does                                     | Rooms                                                    |
-| ------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| brew    | start it, come back when it is ready, share it out       | Break Room, Cafeteria, Lab, Incubator, Conservatory, Nap |
-| tend    | the machine acts up; three taps free it, the room rushes | Sorting, Construction, Repair, Basement                  |
-| watch   | something shows on the screen for ~35 s; catch it        | Security, Research, Rooftop, Archive                     |
-| deliver | a letter, parcel or order arrives; hand it over          | Founder's Desk, Mailroom, Procurement                    |
-| tune    | set the room's mode; each mode is one steady bonus       | Broadcast, Meeting, Marketing, Vault                     |
+| Verb    | What the player does                                     | Rooms                                                                         |
+| ------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| brew    | start it, come back when it is ready, share it out       | Coffee & Morale, Cafeteria, Laboratory, Incubator, Winter garden, Nap Chamber |
+| tend    | the machine acts up; three taps free it, the room rushes | Sorting, Construction, Repair workshop, Basement                              |
+| watch   | something shows on the screen for ~35 s; catch it        | Security, Observation Room, Rooftop, Archive                                  |
+| deliver | a letter, parcel or order arrives; hand it over          | Founder's Desk, Mail Room, Procurement                                        |
+| tune    | set the room's mode; each mode is one steady bonus       | Radio studio, Meeting Room, Marketing, Vault                                  |
 
 Payouts only use existing systems: production-scaled nuts, golden nuts, morale,
 reputation, short boosts, rushes, moods and friendship. Modes feed the company
@@ -114,8 +207,9 @@ modifiers while someone works in the room (and say so on the Company screen).
 
 **Helpers** make a routine better, and the tooltip says who: the room's
 specialists and the player's close friends working there brew faster (20% each,
-up to two), free a stuck machine on their own after a minute, and keep a blip on
-screen 50% longer; a complete decoration set in the room counts too.
+up to two), free a stuck machine on their own after 45 seconds, keep a blip on
+screen 50% longer and bring deliveries more often; a complete decoration set in the
+room counts too, except for freeing a machine (only people do that).
 
 **Decorations** (67, `src/content/decorations.ts`) are bought from the Decorate
 catalogue for nuts or golden nuts; each card shows its surface (floor, wall or
@@ -206,6 +300,15 @@ The loop is notice → investigate → choose → experience → consequence →
   at most one incident per quarter hour, up to two, waiting in their rooms, and
   the welcome-back note counts them. `happenedSince` is what a "while you were
   away" view reads from.
+- **The observation report** (`src/sim/observation.ts`, opened from the Company
+  timeline and the welcome back) is derived, never stored: decisions from the
+  event history, which records who took each one (`by`: player or team) and the
+  card's room; rare incidents that passed and small moments from the diary;
+  what waits from the incidents. Each incident is one row (a card's steps join by
+  the content's own `next`; the diary's started/opened/handled lines are never
+  rows), newest first, at most 40, grouped by day. An unseen incident is never
+  named and no row shows rewards or effects. Older saves' decisions read "on
+  file", without a who or a way there.
 
 ## Progression targets
 
@@ -248,9 +351,55 @@ cycle's production, morale and rare-event odds.
 - **Daily challenges:** deterministic, date-seeded, offline, server-free.
 - **Focus Harvest:** opt-in, supportive productivity companion; never blocks the
   computer; never punishes cancellation.
-- **Micro-games:** Conveyor Sort, Coffee Rescue, Procurement Conveyor, Bug Squash
-  — short, optional, skill-based, rewarding small boosts. See
-  [`MINIGAMES.md`](MINIGAMES.md).
+- **Micro-games:** Coffee Rescue, Bug Squash and Cable Untangle Desk — short, optional,
+  skill-based, rewarding small boosts (below, and [`MINIGAMES.md`](MINIGAMES.md)).
+
+## Micro-games
+
+Three short shifts in the Activities sheet (rules in `src/sim/minigames.ts`, boards in
+`src/ui/minigames/`), each hosted by the first of its team on staff, else Pip. A round
+starts after a 3-2-1 countdown, pauses on Escape or when the window is left, and is paid
+once at the whistle; leaving early pays nothing.
+
+- **Coffee Rescue** (30 s; Marlow and Pip). Move the mug (pointer, finger, or Left/Right
+  or A/D held) to catch falling coffee. Carafes fall slowly and pay double, espressos fall
+  fast and pay most; the grey decaf must be let fall (catching it costs 3 points and the
+  streak), and a missed drink ends the streak. The ticket on the counter is an order of
+  two, then three, then four drinks; filling it pays a bonus. Each round is one of four
+  days in turn (morning rush, espresso hour, catering run, decaf audit) and runs warm-up,
+  service (decaf from 8 s) and rush (two at a time, from 20 s). Combo ×2 at 6 catches, ×3
+  at 12. With reduced motion the cups wait on the counter: tap one or press 1 to 5.
+- **Bug Squash** (30 s; Quincy and Nixie). Pests pop out of a 3×3 grid of drawers: tap
+  them, or press the drawer's number 1 to 9, before they duck back. Runners pay double and
+  hop to another drawer; armoured bugs take two taps and pay double; the golden bug has
+  the shortest window and pays five times; the sticky note is a feature, and squashing it
+  costs 4 points and the streak. An empty drawer costs 2 points, and a bug that gets away
+  ends the streak. Three stages: triage (one at a time), peak hour from 9 s (two at once,
+  armour, the first feature) and closing time from 20 s (three at once, and the golden bug
+  always comes). Combo ×2 at 4 squashes, ×3 at 9.
+- **Cable Untangle Desk** (45 s; Nixie and Bea). Drag the numbered plugs until no cable
+  crosses or overlaps another (keyboard: Tab to a plug, arrows nudge, Shift for big steps,
+  Escape puts a held plug back). Every knot is marked where it is, and a plug resting on a
+  cable is in the way. A desk is wired as one loop, a hub feeding every plug, two separate
+  loops, or a loop with shortcut cables, and is always solvable. A cleared desk pays
+  points (more for more plugs, and more for any wiring but the single loop), plus a speed
+  bonus under par, and the next desk has one more plug, from 5 up to 9. No combo.
+
+**Rewards** (`rewardMicrogame` in `src/sim/engine.ts`). Each game grades its score on its
+own scale (ok / great / mastery: Coffee Rescue 55 / 115 / 170, Bug Squash 40 / 115 / 200,
+Cable Untangle Desk 10 / 20 / 32), so the same skill pays the same in any game.
+
+- Any score above zero pays nuts scaled to current production and to the score's share of
+  the mastery line (capped at 1.6 times the line), and a production boost of 1–50% for
+  90 s (35% at the line). Minigame boosts share one slot: a stronger round takes it, a
+  weaker one only adds its worth as time. A score of zero is filed as practice.
+- A great round earns the game's team on staff +3 friendship and a proud mood.
+- The first round at the mastery line pays 1 golden nut, a Moment Card and the game's
+  souvenir decoration (Menu Board, Specimen Shelf, Pipe Cluster) if not already owned.
+  Masteries are one of the Archive's collections. A mastery can later come back as an
+  office incident, and two of them bring a facility room's discovery forward (see Rooms).
+- Every finished round counts toward the day's challenges; records (best score, plays)
+  survive the restructure.
 
 ## Writing style
 

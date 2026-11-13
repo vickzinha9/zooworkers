@@ -53,6 +53,23 @@ async function desktopBlurFocus() {
         });
       });
 
+    // Precondition: the game window must hold OS focus before a blur can be observed.
+    // Windows gives the foreground to whatever app the player (or another program)
+    // last used, so a freshly launched window does not always have it; without this
+    // the run failed 1 in 5 with "did not emit blur" on a window that was never
+    // focused. The blur and focus assertions below are unchanged.
+    if (!mainWindow.isFocused()) {
+      const gotFocus = waitFor('focus');
+      mainWindow.show();
+      mainWindow.focus();
+      await gotFocus.catch(() => {
+        throw new Error(
+          'precondition: the main Electron window could not take OS focus ' +
+            '(another app holds the Windows foreground), so blur cannot be tested',
+        );
+      });
+    }
+
     // Focus a real second native window instead of manually emitting lifecycle
     // events. This exercises Chromium -> BrowserWindow -> preload IPC -> React.
     const otherWindow = new BrowserWindow({
@@ -94,7 +111,9 @@ try {
     await page.waitForTimeout(120);
   }
 
-  const arrange = page.locator('.office__toolbar .chip-btn').first();
+  // The Arrange toggle. The office toolbar (`.office__toolbar .chip-btn`) became the
+  // scene controls pinned beside the tree (src/art/SceneControls.tsx).
+  const arrange = page.locator('.scene-controls__arrange .scene-btn--arrange');
   await arrange.click();
   const trayCard = page.locator('.deco-tray__card').first();
   const trayDecoration = trayCard.locator('.decor');

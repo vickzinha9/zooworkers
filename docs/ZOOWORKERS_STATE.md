@@ -4,11 +4,28 @@ Handoff only: design is in `DESIGN.md`, commands and matrix in `.kiro/steering/q
 
 ## Branch
 
+`feat/zooworkers-1.0-release` (draft PR #14 into `feat/zooworkers-3.0-facility-pass`): the
+release branch. It merges Phase 1 (PR #12, `fb14763`), Phase 2 (PR #13, `19f30ac`) and
+Feature A (PR #11, `96e7bbb`) by merge commits, without changing those branches or PRs, and
+carries the release work (Release record below). Merging PR #14 would also land #11, #12 and
+#13; that order is the user's call.
+
 `feat/zooworkers-3.0-facility-pass`: final integration is the commit that records this entry,
 on top of Chapter 10 (`f2c5b90`), Chapter 8 (`60fdd3c`), Chapter 7 (`4639fa2`), Chapter 6
 (`25ba899`), Chapter 5 (`f4ae64c`), Chapter 3 (`8cbf590`), Chapter 2 (`d6c4d28`), Chapter 9
 (`d9fab09`), Chapter 4 (`e7bac62`), Chapter 1 (`80264a8`) and the setup commit `c55d356`; clean.
 `7a7ee3d` (architect's snapshot) is an ancestor; never roll back to it.
+`feat/zooworkers-phase-2-release-hygiene` (Phase 2, record below) adds one commit on `9f5ef83`;
+it is independent of `feat/zooworkers-windows-verification` (Phase 1).
+
+`feat/zooworkers-windows-verification`: Phase 1 (native Windows release verification, run by
+Claude Code on a Windows 11 PC), branched from the final integration `9f5ef83`. PR #9 and
+`feat/zooworkers-3.0-facility-pass` stay unchanged. Claude Code reads `CLAUDE.md` (which imports
+this repo's `AGENTS.md`), the specialists in `.claude/agents/` and `docs/ROADMAP.md`.
+
+`feat/zooworkers-observation-log`: Feature A (the observation report), one commit on the final
+integration `9f5ef83`, with a PR into `feat/zooworkers-3.0-facility-pass`. PR #9 stays open,
+unmerged and unchanged.
 
 ## Active configuration
 
@@ -44,6 +61,10 @@ on top of Chapter 10 (`f2c5b90`), Chapter 8 (`60fdd3c`), Chapter 7 (`4639fa2`), 
 - Final integration session: the same; `/tmp` is not kept between shell calls either, so raw
   logs went to the ignored `visual-artifacts/logs/`. CI artifacts (the Playwright report)
   cannot be downloaded from here (HTTP 403), so CI evidence is the job log.
+- Phase 2 session (Claude Code, native Windows 11): E2E runs on this PC at
+  `npm run test:e2e -- --workers=4`; the global setup keeps the run's processes off Windows
+  power throttling (see the Phase 2 record). Prettier on this CRLF checkout needs
+  `--end-of-line auto`. No `gh` CLI: CI evidence comes from the GitHub web pages.
 
 ## Validation
 
@@ -64,7 +85,7 @@ GC numbers are not kit numbers.
 | --- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | 1   | `App`, `ui/GameHud`, `GameDock`, `Sheet`, `modals/OpeningSequence`, `Onboarding`, `art/OfficeScene`, `views/SettingsView` | Accepted (record below)               |
 | 4   | `sim/goals`, `crate`, `economy`, `ui/GoalTag`, `views/ShopView`                                                           | Accepted (record below)               |
-| 9   | `engine.catchUp`, `sim/offline`, `sim/timeline`, `state/returns`, `ui/ReturnNote`, `ui/Notifications`                     | Accepted (record below); diary unread |
+| 9   | `engine.catchUp`, `sim/offline`, `sim/timeline`, `state/returns`, `ui/ReturnNote`, `ui/Notifications`                     | Accepted; diary now read by Feature A |
 | 2   | `views/EmployeesView`, `modals/EmployeeTalk`, `sim/bonds`                                                                 | Accepted (record below)               |
 | 3   | `art/RoomDressing`, `RoomPlay`, `content/rooms`, `roomPlay`                                                               | Accepted (record below)               |
 | 5   | `ui/minigames/*`, `sim/minigames`                                                                                         | Accepted (record below)               |
@@ -174,6 +195,11 @@ once a minute). Longer means the game was not running (asleep, frozen) and uses 
 rules. Closed time (boot, `settleClosedTime`) always uses the away rules. A backwards clock
 pays nothing. `lastSaved` records the settled boundary, not the moment of writing. Hide and
 unload count the open time first. No save field was added.
+
+Refined by Phase 1 for the desktop app: a minimized Windows window can go well past 300 s
+without a timer while the computer is awake, so there a longer gap first asks the shell how
+much of it the computer was really suspended (`setSuspendOracle`, Electron `powerMonitor`), pays
+that much at the away rules and the rest as open play. The browser keeps the rule above.
 
 Fixed (measured before → after):
 
@@ -892,7 +918,347 @@ broken): the Team sheet's first opening with all 23 and every decoration takes ~
 Release readiness: the browser build is integrated and green, but the release stays BLOCKED
 on the human checks below (audio, physical touch, native Windows/DPI). PR #9 is not merged.
 
+### Phase 1 record — native Windows release verification
+
+The first native run since `a4e03ad`, on `feat/zooworkers-windows-verification`: Windows 11
+(10.0.26300), two monitors at 100 % (primary work area 2500×1080 from x 60), Node 24, Electron
+43.1.1, the packaged `release\win-unpacked\ZooWorkers.exe` with the GPU on (compositing, WebGL
+and rasterization enabled), pt-BR.
+
+Baseline on `9f5ef83`:
+
+- `npm ci` and `npm run validate` exit 0 (1035 tests, 84 files).
+- Full E2E at Playwright's default 8 workers: 334 passed, 34 failed, 9 did not run (timeouts
+  under load, plus 13 trace-zip write errors). The 34 then passed 34/34 at 2 workers, and
+  `minigame-polish` 10/10.
+- `build:windows:folder` exit 0. `verify:packaged` (art for all 23), `smoke:minimal`,
+  `smoke:mute` (master 0.8 → 0 → 0.8), `smoke:packaged`, `smoke:recovery` and
+  `smoke:singleinstance` OK.
+- `smoke:window` and `smoke:focus` failed on selectors Chapter 1's dock and Chapter 8's scene
+  controls removed (`.nav`, `.office__toolbar .chip-btn`); they had not run since. Both now
+  follow the current UI, with no check loosened (old → new map in the scripts' comments).
+  `smoke:window` now asserts maximize/restore on Windows.
+- `smoke:spacedpath` loaded, then its cleanup lost a race with Chromium's profile lock. Cleanup
+  now retries for up to 20 s after unlinking the `node_modules` junction first.
+
+Played in the packaged app and found good:
+
+- First run: first frame in 2.6 s; the opening by keyboard; 10 crate taps paid; a relaunch
+  kept the save and skipped the opening; startup.log reached STARTUP SUCCESS, with no safe mode,
+  ERR_FAILED, "destroyed" or render-process-gone.
+- A v10 save with all 23 hired migrated to v13 and ran at 182K/s.
+- Window: corners 16 px from the edges; always on top off and on; click-through plus quiet
+  (master 0.20) kept producing (+960K to the vault in 10 s, the vault's half of 182K/s).
+- A Coffee round paused when another window took focus: overlay, timer held, "Continuar".
+- 144 view × size × scale combinations: 9 views; 320×420, 380×460, 800×600 and 1280×720; scale
+  1, 1.25, 1.5 and 2 via `--force-device-scale-factor`. None scrolled sideways, no dock, HUD,
+  close or window control left the window, and no visible text was under 11 px. The 1x sprite
+  is chosen at scale 1, the full build above.
+- Minimized for 60 s (real, no harness): 3.5 % of one core, working set 595 → 440 MB.
+
+Fixed (each reproduced first on the real exe; new tests fail on `9f5ef83`):
+
+1. The window forgot where it lives. Moving or resizing saved only the size, and a saved size
+   switched off corner placement, so every launch after the first opened centred (x 1120 instead
+   of 2164). Position is now saved too, as normal-state bounds only (never minimized or
+   maximized). Launch order:
+   - the saved spot, when a quarter of its 44 px top strip is on a connected display;
+   - otherwise the saved corner on the display under the cursor;
+   - otherwise the centre;
+   - always clamped onto one display.
+
+   Rules are in `electron/windowPlacement.ts`, tests in `windowPlacement.test.ts` (29), and
+   `smoke:window` covers relaunch, a second monitor and an off-screen spot. Measured: first
+   launch and relaunch both at (2164, 604), logged "corner" then "saved".
+
+2. The tray menu was English for everyone. The renderer now sends the localized labels over
+   one validated channel (`tray:set-labels`); pt-BR reads Mostrar, Esconder, Modo Silencioso,
+   Ajustes…, Sair. Tests: `trayLabels.test.ts`, `trayLabelsApp.test.tsx`, and `smoke:window`
+   reads the rebuilt menu.
+3. Minimized time was paid as sleep. Ten minutes minimized with the PC awake read "O computador
+   dormiu 6 min: esse tempo rende 60%" (+43M where about 55M was due), because the minimized
+   renderer ran no timer for more than `awayGapSeconds`. The main process now logs real system
+   suspend and resume (`electron/suspendLog.ts`, `powerMonitor`), and a gap over 300 s asks it
+   how much was suspended (`setSuspendOracle` in `state/store.ts`, `engine.catchUp(hint)`).
+   - That much is paid at the away rules and the rest as open play (open part first, bounded
+     slices).
+   - Unknown, timed out, reversed or before-recording answers, or a wall clock that jumped
+     (checked in main and against the monotonic clock in the renderer), keep the old rule.
+   - Windows does not always announce a suspension (Modern Standby can freeze the app without
+     a 'suspend'). Main beats every 10 s, and a stretch of over 60 s in which it ran nothing is
+     recorded as a suspension, so it is paid as sleep, not open play.
+   - The browser is byte-for-byte unchanged.
+   - Tests: `timeAccounting` (+), `suspendOracle.test.ts`, `suspendLog.test.ts`,
+     `platformSuspend.test.ts`, `smoke:suspend`.
+   - The independent QA review caught the first version failing under load. In 4 of 4 loaded
+     runs with a timer gap over 300 s the note still said "dormiu 6–10 min": the store paired
+     the wall time from the start of a catch-up with the monotonic time read after it, so a
+     starved renderer's slow catch-up looked like a clock moved forward. Both clocks are now
+     read at the same instant (`settledHere`), and every engine settlement, boot included,
+     ends at the instant it read. The new tests (a 10 s and a 30 s catch-up, the engine's end
+     instant, the boot's) fail on the first version.
+   - Repro on the rebuilt exe without Playwright, under 12 busy processes for 9 min, 495 s
+     minimized. The longest timer gap was 489 s; main was asked once (about a 335 s gap) and
+     answered 0 at once. The note: "8 min fora · +46,9M castanhas · Aberto no canto, o
+     escritório rendeu tudo." and "Caixote cheio · 54,7M para recolher". Over the 728 s from
+     the first reading, vault plus crate grew 128,3M against about 132,5M at the HUD's 182K/s.
+     No silence and no clock jump were logged. A 5 s tray hide shows no note.
+   - The earlier quiet 424 s run (78,1M against 77,2M due) never went 300 s without a timer:
+     it showed the note, not the fix.
+   - Known and bounded: a boost or purchase made while the answer is out (7–14 ms measured, at
+     most 1 s) counts across the whole gap.
+4. Team cards broke at mid widths. From 760 to about 1315 px (a side-panel sheet) and from 381
+   to about 515 px, the card kept a window-width three-column layout: names one letter per line,
+   actions past the sheet, sideways scroll (+51 px at 800×600). The card now lays out from its
+   own width (`@container roster`): stacked, actions under the portrait, or three columns, with
+   the portrait size kept. `tests/e2e/team-card-layout.spec.ts` failed 15/16 on the old code.
+   After the QA review it loads the company once per group of sizes and resizes the window
+   between them (14 sizes in 2 tests, plus 2 keyboard tests); a planted overflow is reported at
+   all 8 sizes of its group. Confirmed in the packaged app at 800×600.
+
+Also: `smoke:focus` needed its precondition made explicit. The game window must hold OS focus
+before a blur can be tested; one run in five started without it. After the fix: 8/8.
+
+Final checks:
+
+- `npm run validate` exit 0 (1143 tests, 90 files) after the QA fixes. After the second
+  review's boot fix: typecheck, lint and the unit suite exit 0 (1146 tests, 90 files).
+- `build:windows:folder`, `verify:packaged` and the exe's `packaged`, `suspend` and `minimal`
+  smokes exit 0 on the final code. `build:windows` (NSIS), `build:steam` and `verify:steam`
+  exit 0 before the QA fixes; no packaging file changed since.
+- Every smoke exit 0 on the final code: `minimal`, `window`, `mute`, `spacedpath`, `suspend`
+  (also against the exe), `focus`, and against the exe `packaged`, `recovery` (both with
+  `PKG_USERDATA` set) and `singleinstance`. Before the QA fixes, each passed twice and
+  `smoke:focus` 8/8.
+- Size, measured not fixed: the packaged app is 704 MB (character APNGs 299 MB; the largest
+  14 MB), `ZooWorkers.exe` 215 MB (verify:steam's one warning), the NSIS installer 453 MB.
+  This is for the efficiency and Steam phases.
+- E2E, measured under load and reported as it came out (no test changed to pass):
+  - Independent QA review, before its fixes, 4 workers: 385 passed, 8 failed of 393 in 15.5 min;
+    the 8 alone, 3 repeats each: 51/51. Its verdict was "not ready" (item 3); fixed above. Its
+    second, focused review of the fixes: "ready", with one boot-path note, fixed, and two event
+    orders it confirmed, now tested.
+  - Final code, 4 workers, with another project's Playwright Chromium open beside it: 301
+    passed, 71 failed, 9 did not run in 28.6 min. 68 of the 71 were test timeouts, spread over
+    20 files.
+  - Those 20 files in full at 2 workers: 182 passed, 3 failed (timeouts in
+    `release-transformation`) in 10.9 min. Those 3 alone, 3 repeats each: 9/9 in 2.3 min.
+  - Every test that failed passed when re-run with less load. The suite's load sensitivity is
+    a Phase 2 follow-up (`docs/ROADMAP.md`).
+
+Harness notes for whoever repeats this:
+
+- Playwright keeps an Electron page "visible" when minimized or hidden, and emulates focus.
+  Check minimize, tray and blur on the real exe without it, as `visual-artifacts/p1/raw-min.mjs`
+  does (raw CDP plus Win32 `ShowWindow`), or with focus emulation off.
+- Stop Vite dev servers before `build:windows:folder`: a watched `release\` folder cannot be
+  renamed on Windows (EPERM).
+- A dev server reloads every open page when another process saves a file, so run E2E on
+  `vite preview` or with the watcher off while others edit.
+
+### Phase 2 record — integration and release hygiene
+
+`feat/zooworkers-phase-2-release-hygiene` on `9f5ef83`, apart from Phase 1's
+`feat/zooworkers-windows-verification` (which records its own work). Claude Code on native
+Windows 11: i5-14400F (6 performance + 4 efficiency cores, 16 threads), Balanced power plan,
+Node 24, Chromium 1228.
+
+Language menu. Measured: the ten draft locales hold 24 of 4,424 keys (0.5%; 0.1% of words);
+pt-BR 99.3% of keys and 99.9% of words (the rest are names, "OK" and the like). Settings
+offered all twelve by name, so "Deutsch" gave English text under `lang="de"` (a screen reader
+reads it in a German voice), and the browser detector opened a German, Spanish, French or
+Japanese system in its draft (zh-HK in zh-CN). Now (`src/i18n/index.ts`): Settings lists the
+complete languages (`_meta.complete`), English and Português (Brasil); start picks the player's
+choice when it is offered, else the first complete system language (any Portuguese → pt-BR),
+else English; a save or `wmno.lang` naming a draft opens in a complete language and the save
+keeps its value. The draft files stay. `i18next-browser-languagedetector` is no longer imported
+(still in `package.json`). Hiding the drafts rather than labelling them partial was the
+recommended option, and the user chose it (2026-11-11).
+
+E2E reliability. Each named spec ran 50 times per row (`--repeat-each=50`); failed runs:
+
+| Run                         | minigame-rounds (8 tests)      | office-play (22) | event-setting (4) |
+| --------------------------- | ------------------------------ | ---------------- | ----------------- |
+| `9f5ef83`, 8 workers        | 169/400, 74 min                | 6/1100, 33 min   | 82/200, 19 min    |
+| + EcoQoS opt-out, 8 workers | 53/400, 33 min                 | 0/1100, 13 min   | 0/200, 3.4 min    |
+| + EcoQoS opt-out, 4 workers | 4/400, 33 min                  | —                | —                 |
+| Final, 8 workers            | 47/400, 36 min (timeouts only) | spec unchanged   | spec unchanged    |
+| Final, 4 workers            | 0/400, 26 min                  | —                | —                 |
+
+office-play and event-setting are unchanged by the test fixes; at 4 workers they pass in each
+full run below. In the "Final" rows the Esc-pause test still ran on a running clock; it holds
+its clock since (50/50 at 4 workers).
+
+1. Machine, all three specs: Windows power throttling (EcoQoS) keeps background, windowless
+   processes (headless Chromium, the Playwright workers) on the four efficiency cores. They ran
+   at 98–100% while the performance threads idled at 10–35%; a normal-priority watcher woke up
+   to 96 s late (a high-priority one never), and waves of tests timed out at whatever step they
+   were on (new page, goto, click, `runFor`). `tests/e2e/support/globalSetup.ts` starts
+   `scripts/e2e-windows-qos.ps1` on Windows, which opts only the run's own process tree out
+   (`SetProcessInformation`, `ProcessPowerThrottling`); `E2E_WINDOWS_QOS=0` restores the old
+   behaviour. event-setting ×10 at 8 workers: 8/40 and 23/40 failed in 4.3–6.4 min before;
+   40/40 passed in 43 s after.
+2. Test design, minigame-rounds: the installed fake clock also runs in real time between
+   steps, so a round's seed (the clock when a game opens) depended on how long the office took
+   to load, and under load the round moved on between steps: a pest came up in the drawer a
+   test was about to press as empty (with a 3 s wait added: a new pest in 3 of 3 runs, none
+   when held), an order rolled over before its check, a round ended before the taps reached 200. `start` now stops the clock at a fixed moment before it opens a game, so each round is
+   the same round every run (same first order and drawer ×4) and moves only as the test runs
+   it; what the game draws on its next frame (a focus) needs a frame of clock. The mastery
+   loop's 400 steps stopped 400 ms short of the 30 s round, reached only through real time; its
+   bound is now the round's length. The Coffee order test tapped the first drop rather than
+   what the ticket asked for; the Bug Squash shift test made six reads per 80 ms step (now one).
+   No assertion was changed, removed or loosened.
+3. Cost, understood: Playwright's fake clock waits a real macrotask (≥ 4 ms) after every timer
+   it fires, and a Bug Squash round fires about 580 callbacks per 10 s, so fast-forwarding a
+   round is CPU-bound (alone: the shift test 8.6 s, the payout test 23 s). At 8 workers on 10
+   physical cores they stretch about 3×: the 47 final failures are all timeouts (39 the shift
+   test against 30 s, 8 the mastery test against 90 s), none an assertion. Local E2E on this PC
+   is therefore stated at 4 workers (`npm run test:e2e -- --workers=4`); CI's 4-vCPU runner uses
+   Playwright's default of 2.
+
+4. Trace cost, `release-transformation` (found by the full suite at 4 workers, 381/382: the
+   gift test ran out of time on its last screen). Every test there opens a mature company (an
+   office of about 2,900 elements), and `trace: 'retain-on-failure'` records a DOM snapshot of
+   it at every action. The spec ×5 at 4 workers: 10/40 timed out (gift test 5/5) in 376 s;
+   with no trace 0/40 in 119 s. That spec now keeps traces without the per-action DOM
+   snapshots (actions, timings, console, network and screenshots stay; checked on a forced
+   failure): 0/40 in 151 s, gift test median 13.2 s. The final integration's CI failure of
+   this spec (13 s untraced, 34–60 s traced) had the same cause.
+
+No application defect was found behind any of these failures.
+
+Docs: `AGENTS.md` and the issue template's advisory link name `vickzinha9/zooworkers` (the old
+URLs only redirect). `docs/GAME_DESIGN.md` (narrative-content, checked against
+`content/employees.ts`, `rooms.ts` and `sim/minigames.ts`) lists the 23, the 21 rooms and the
+three games with their play and rewards, and corrects the rush (9 taps, not 8) and the helpers
+(a machine after 45 s, not a minute). `LOCALIZATION.md`, `README.md`, `STEAM.md` and
+`HOW_TO_PUBLISH_ON_STEAM.md` name the two offered languages.
+
+PR #11 (`feat/zooworkers-observation-log` at `96e7bbb`, review only, nothing changed):
+qa-playtest's verdict is **approve with fixes**. Its run: `validate` exit 0 (1063 tests, 86
+files); 13 related Vitest files 190/190; six related E2E specs 47/47 and `observation.spec` ×5
+25/25 at 4 workers; the full suite at 4 workers 378/382, the 4 being `release-transformation`
+timeouts while creating a page, on all four workers at once (3/3 on repeat; no PR file on their
+path). Rendered in pt-BR at 1280×720 and 320×420, with high contrast and reduced motion: a team
+decision is recorded as "Equipe" with its room and survives a reload; the welcome-back link
+fits. Required before merge: F1, the "Não observado" stamp runs 17–20 px past its `6.4em`
+column, under the redaction bar, at 800 px and wider (`observation.css:87`, `:109`; the E2E
+cut-off check compares only each element's own scroll width); F2, focus falls to `<body>` when
+a report opened from the welcome back closes, because the note hides under any popup
+(`Notifications.tsx:58`, `PopupShell.tsx:63-64`). Optional: scroll keys need one Tab first
+(`ObservationReport.tsx:250`); rows pass under the tape strip at 320×420; the subtitle does not
+fit "Você decidiu" rows.
+
+Found, not changed (outside this phase): the helper tooltip says "after a minute" while
+`roomPlay.ts:102` frees a machine after 45 s; stale comments in `rooms.ts:3` ("Eighteen") and
+`employees.ts:3` ("Six"); the English room names mix capitalisation.
+
+Checks: `npm run validate` exit 0 (typecheck; lint, 0 warnings; i18n, 0 errors and the 10
+draft warnings; assets; 1072 tests in 85 files; build). `tests/languageChoice.test.ts` and
+`tests/e2e/settings-language.spec.ts` (5/5; on `9f5ef83` the German system and the old draft save fail, opening in `de`). Rendered
+Settings in pt-BR at 320×420 and 1280×720 inspected: "Idioma do jogo · Português (Brasil)"
+reads in full inside the window, no sideways scroll. Six checks for the language setting —
+see, understand, interact, feedback, why it matters, feel: PASS. Full E2E at 4 workers
+(`npm run test:e2e -- --workers=4`), on the way to the final tree: 381/382 (the gift test,
+before item 4), 382/382, then 381/382: the Esc-pause test, then still on a running clock,
+stalled after opening the Archive (no frame drawn and no answer to Playwright for its last
+10 s; closing the page took 35 s). Its cause is not proven; that test now holds its clock like
+the others (50/50 at 4 workers). Final tree: 382/382 twice (7.6 and 7.2 min). CI: no run on
+this branch (`ci.yml` runs on pull requests and pushes to `main`;
+this branch has no PR yet); PR #9's E2E job at `9f5ef83` passed (run 39267621652).
+
+### Feature A record — the observation report
+
+The gap: the office diary was written but never read, and nothing said who decided an incident
+nobody opened. Now Nutshell's researchers keep a file on the office, read from what the game
+already records (`sim/observation.ts`, derived on render, never stored):
+
+- Data: `EventHistoryEntry` gains optional `by` (`player`/`team`) and `roomId`, written by
+  the engine when a decision is taken (the team only inside `autoResolveActiveEvent`, through
+  a private flag); conversations are the player's. No save version bump: older entries load
+  as they are and read "Arquivado / Decisão arquivada", with no who and no way there. The
+  history now parses entry by entry (`listOf`, newest `EVENT_HISTORY_SIZE` = 50, shared with
+  the engine): a bad field or record is dropped, not the list. No timestamp matching.
+- Rows: decisions from the history (a card's steps are one row, joined by the content's own
+  `next`; the same card twice is two rows; talks stay in the Album); rare/legendary incidents
+  that passed and small moments from the diary; what waits from the incidents. The diary's
+  started/opened/handled/landed/remark lines are never rows, so each incident is told once.
+  Newest first, at most 40, by day (Hoje, Ontem, a date). An unseen incident has no event id
+  in its row: a black bar, "Nome não registrado" for screen readers; no row shows rewards,
+  effects or secrets. Each row's "Ir até lá" goes to its room while that room is open (the
+  welcome back's way there; a waiting incident's ticket takes the keyboard). A restructure
+  resets history and diary, so the file starts over.
+- UI: a `PopupShell` document (letterhead, "Uso interno" stamp, worded stamps Equipe, Você,
+  Arquivado, Não observado, Momento, Esperando), opened from Arquivo → Empresa (the timeline
+  also marks rows Equipe/Você) and from the welcome back when the file has something. It opens
+  at its letterhead (`initialFocus="dialog"`; Tab and Shift+Tab enter it). Reuses the paper cue.
+- Files: `sim/observation.ts`, `ui/ObservationReport.tsx`, `ui/game/observation.css` (new);
+  `sim/types`, `config`, `engine`, `format`, `save/schema`, `state/store`, `ui/ReturnNote`,
+  `views/CompanyView`, `modals/PopupShell`, `useFmt`, `App`, `main`, en/pt-BR locales; tests
+  `observationReport.test.ts` (21), `observationReport.test.tsx` (7), `e2e/observation.spec.ts`
+  (5); a note each in `HOW_TO_PLAY_THE_GAME.md` and `GAME_DESIGN.md`.
+
+Rendered play (pt-BR, built game, real clicks and keys; a seeded company):
+
+- 380×460: the elevator to the lab, its ticket, "Puxar da tomada"; the meeting room's incident,
+  left alone, handled by the team; the timeline's Equipe and Você; the report with both; at
+  all six sizes the file inside the window, no sideways scroll, ways there 34 px, Close on
+  screen, no text under 11 px; Escape back to the button; "Ir até lá" closed the Archive with
+  the meeting floor in view; a reload kept who and where.
+- 320×420, closed 2 h: the note's crate line, one waiting line and "Ler o relatório de
+  observação" (35 px, above the dock); the file's unseen rare row with no name anywhere; high
+  contrast black words and frames; reduced motion without animation.
+- Fixed during play: the tape over the letterhead, a 1 px sideways scroll (the tilted stamp),
+  the file opening scrolled to its first button at 320×420, the waiting stamp's contrast
+  (3.69 → 5.22:1; every text role ≥ 5.22, 21 in high contrast), an arrow glyph the bundled
+  fonts lack (a card's next step is a "Depois:" line now), a truncated note link.
+- Six checks — see, understand, interact, feedback, why it matters, feel: PASS (audio not heard).
+
+Checks: `npm run validate` exit 0 (1063 tests, 86 files); full web E2E 382/382, exit 0 (an
+earlier full run had two `event-setting` boots time out under load; 4/4 alone). The Coffee
+"fills the order" round is a load flake on both trees: 2 failures in 63 repeated runs here, 1
+in 63 on a `9f5ef83` worktree; no minigame code changed. `npm run build:desktop` exit 0; no
+desktop code changed, and Electron still cannot start here.
+
+### Release record — the 1.0 release branch (in progress)
+
+Integration: `feat/zooworkers-1.0-release` from Phase 1's head, `--no-ff` merges of Phase 2
+(`2770749`; conflicts in this file and one `src/main.tsx` comment, both kept) and PR #11
+(`54afbd2`; this file only). `npm run validate` on the merged tree: exit 0, 1211 tests.
+
+Phase 2, finished here:
+
+- PR #11's QA findings, all five fixed (`fc09ca4`). F1: the report shares one set of columns
+  (subgrid); the stamp column fits the widest stamp (at least 6.4em), so "Não observado"
+  no longer runs under the redaction bar, and every line's words start at one place. F2:
+  `PopupShell` gives focus back to the opener, or to its new self when the opener names
+  itself with `data-focus-return` (the welcome back's link comes back as a new button).
+  F3: the reading keys scroll a document opened on the dialog itself. F4: the paper's top
+  margin clears the tape. F5: the lede names who decided. `observation.spec` gained the
+  checks; on a build of the pre-fix tree they fail (800×600 stamp over the words; 8.5 px under
+  the tape at 320×420; PageDown does not scroll; the link not focused), with the fix 6/6.
+- The helper hint says the real 45 s (`ROOM_PLAY.selfFixSeconds`); room names capitalised
+  one way in EN and pt-BR; stale "Eighteen"/"Six" comments (`bda4f0d`).
+- A 'suspend' whose 'resume' never comes is closed by main's heartbeat: at the first reading
+  after a freeze plus 20 s of regular beats, or after 10 min with no freeze (`654358e`,
+  suspendLog 35/35).
+- `qa-inspect.mjs` fakes the whole desktop bridge (`6aebe8c`).
+- CI: PR #13's run at `19f30ac` passed both jobs (E2E 382/382, 2 workers, 11.3 min). PR #14's
+  run 43284573636 at `82ac4fd` passed both jobs (E2E 15 min 36 s). `npm run validate` at
+  `6aebe8c`: exit 0, 1215 tests in 93 files.
+
+Phase 7, started: all 44 achievements map to Steamworks API names; `docs/STEAM_ACHIEVEMENTS.md`
+is generated from the game data with EN and pt-BR names and descriptions, and a test keeps it
+in sync (`82ac4fd`).
+
+Phases 3–6 and the rest of 7 are in progress with the specialists (performance baseline,
+player-surface audit, pacing harness, audio fixes, store text and test docs).
+
 ## Blockers
+
+- PR #11's F1 and F2 are fixed on `feat/zooworkers-1.0-release` (Release record), not on PR #11's
+  own branch, which stays at `96e7bbb`. Merging PR #11 alone would land them unfixed.
 
 - Kiro Web listed no skills this session; `zooworkers-playtest/SKILL.md` was followed by hand.
 - `templates/AGENTS.md` may load as a nested second AGENTS.md (Kiro docs); kept as instructed.
@@ -916,7 +1282,8 @@ on the human checks below (audio, physical touch, native Windows/DPI). PR #9 is 
   Chapter 10: the prestige cue on a restructure (once, then the office), the error cue on a
   refused restructure and on a short skill press, the upgrade cue on a skill bought, and the
   paper cue on opening a keepsake's album from the Collections. Final integration changed no
-  sound; all of the above is still unheard.
+  sound; all of the above is still unheard. Feature A: the paper cue on opening the
+  observation report, from the timeline and from the welcome back (right after its own cue).
 - Touch was driven through Chromium's touch emulation, not a physical touchscreen. Chapter 6:
   a tap takes an answer at once, so on touch the effect line is the explanation (the scene's
   preview needs a pointer or keys); check that it reads well on a physical screen. Chapter 7:
@@ -927,12 +1294,50 @@ on the human checks below (audio, physical touch, native Windows/DPI). PR #9 is 
   branch card, the restructure action and both confirmation buttons, and a Collections drawer
   and its way back. Final integration: tap a lead on the curiosity board (its file comes into
   view), and scroll the tower with a finger right after the elevator lands (it must not drift).
-- LOCAL WINDOWS VERIFICATION REQUIRED: the last recorded native run is `a4e03ad`. In the final
-  integration session the Electron binary downloaded but cannot start (`libgtk-3.so.0` missing,
-  no display; `smoke:minimal` exit 1, "Process failed to launch!"), so no smoke, packaging or
-  DPI check ran. On Windows: `npm run build:windows:folder`,
-  `npm run verify:windows:packaged`, then `smoke:window`, `smoke:focus` and `smoke:mute`.
-  Expect the HUD shelf to drag the window everywhere except buttons (masthead included), the
+  Feature A: tap "Relatório de observação" in Arquivo → Empresa and on the welcome back, scroll
+  the file with a finger at 320×420 (it scrolls inside its paper, Fechar stays put), and tap a
+  row's "Ir até lá" (34 px) without hitting the row below.
+- LOCAL WINDOWS VERIFICATION REQUIRED (human only, after Phase 1). Phase 1 ran every build,
+  verify and smoke script natively on Windows 11 at 100 %, and played the packaged exe. That
+  covers the automatable parts of checks 1, 4 and 8 below (real minimize and tray return,
+  click-through with quiet, a round pausing on blur) and approximates 5–7, 9 and 13–17 with
+  `--force-device-scale-factor` 1.25–2. Still needs a person:
+  - A. Real display scaling at 125/150/200 % (Settings › System › Display › Scale; sign out if
+    asked). Drag the window off its corner, close with ✕, relaunch: same spot and size, sharp,
+    HUD whole. Repeat with only the second monitor scaled and the window on it. Then checks
+    5–7, 9 and 11–17 below at those scales.
+  - B. Unplugging a monitor: close the game on the second monitor, unplug it, launch. Expect the
+    bottom-right corner of the remaining display at the same size, and
+    `window placement: corner` in `%APPDATA%\ZooWorkers\startup.log`. Plug it back and
+    relaunch: where it was closed.
+  - C. The tray menu by hand: in pt-BR, right-click the tray icon. Expect Mostrar, Esconder,
+    Modo Silencioso (checked when on), Ajustes…, Sair, each working. Switch to English in
+    Settings and right-click again without restarting: Show, Hide, Quiet Mode, Settings…, Quit.
+  - D. Real sleep (check 2). Run `powercfg /a` and note whether S3 or S0 Low Power Idle (Modern
+    Standby) is available. With the game open, Start › Power › Sleep for 15 min, then wake.
+    - With S3, expect `system suspend.` and `system resume.` in startup.log and "O computador
+      dormiu 15 min: esse tempo rende 60%…".
+    - With Modern Standby, Windows may send no events. Expect instead
+      `main ran nothing for over a minute: recorded as a suspension nobody announced.` (or
+      `wall clock jump noticed`, if the monotonic clock stopped too) and the same sleep note.
+      If none of these lines is there and the note reads "rendeu tudo", the app kept running
+      in standby: report it.
+    - Repeat once with hibernate if enabled. This PC has S3 only (`powercfg /a`), so the
+      Modern Standby case needs a laptop that lists S0 Low Power Idle.
+  - E. Clock change: with the game open, set the clock 1 h ahead, then minimize for 6 min.
+    Expect `wall clock jump noticed` in startup.log and the old away rule for that gap, not a
+    full open payment.
+  - F. The NSIS installer and the portable build: install, launch from the Start menu and the
+    desktop shortcut, uninstall. Expect SmartScreen's "Windows protected your PC" until the
+    build is signed.
+  - G. Minimized under a heavy load: minimize the game, run something CPU-heavy for 10 min (a
+    build, a video export), stop it, restore. Expect "Aberto no canto, o escritório rendeu
+    tudo." and vault plus crate gain ≈ HUD rate × 600, never "dormiu".
+  - A, extended: mixed scaling (one monitor at 100 %, the other at 150 %) and a second monitor
+    placed left of or above the primary, which this PC cannot set up.
+
+  The original list follows. Expect the HUD shelf to drag the window everywhere except
+  buttons (masthead included), the
   masthead to show only at ≥760px beside the window controls and never collide with them, and
   320×420 to keep the meadow strip, the goal tag and the scene controls usable at 100–200% DPI.
   Chapter 9, in `release\win-unpacked\ZooWorkers.exe` (pt-BR):
@@ -997,9 +1402,15 @@ on the human checks below (audio, physical touch, native Windows/DPI). PR #9 is 
   20. Restructure a company past 1M and expect the gold note to read in full on two lines;
       in Arquivo → Coleções, a room that closed reads "Fechada até reabrir" with what was
       noticed in it.
+      Feature A (no desktop code changed):
+  21. With the window always on top in a corner, leave a **!** ticket unopened for 25 min
+      while working in another app. Expect it handled by the team, and Arquivo → Empresa to
+      mark the row "Equipe"; minimizing instead must leave it waiting.
+  22. At 320×420 and 125/150/200% DPI, open the report from Arquivo → Empresa and from the
+      welcome back after a night closed. Expect the letterhead on screen first, no sideways
+      scroll, Fechar in the window, and "Ir até lá" bringing the room's floor up.
 
 ## Next prompt
 
-Release verification on this branch: the human checks under Blockers (audio, a physical
-touchscreen, native Windows packaging and 100–200% DPI), then the merge of PR #9 when the user
-decides. Read CI's E2E job on the pushed commit first; `main` has none of this configuration.
+Integration: `feat/zooworkers-1.0-release` merges Phase 1 (PR #12), Phase 2 (PR #13) and
+PR #11 without changing those branches; the release work continues there (record below).

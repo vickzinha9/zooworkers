@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { matchLanguage } from './i18n';
 import {
   useStore,
   startGameLoop,
@@ -19,6 +20,7 @@ import { EmployeeTalk } from './ui/modals/EmployeeTalk';
 import { OfficeScene } from './art/OfficeScene';
 import { EventModal } from './ui/modals/EventModal';
 import { ConsequenceModal } from './ui/modals/ConsequenceModal';
+import { ObservationReport } from './ui/ObservationReport';
 import { Onboarding } from './ui/modals/Onboarding';
 import { OpeningSequence } from './ui/modals/OpeningSequence';
 import { Notifications } from './ui/Notifications';
@@ -44,7 +46,7 @@ function subscribeNarrow(onChange: () => void): () => void {
 const readNarrow = () => Boolean(window.matchMedia?.(NARROW_QUERY).matches);
 
 export function App() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { state, engine } = useGame();
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
@@ -135,17 +137,33 @@ export function App() {
   // Keep i18n and the save in agreement on boot. A brand-new company has not
   // chosen a language (the schema default is 'en'), so the detected one wins
   // there — the player's last pick (wmno.lang), then the system language — and is
-  // recorded; otherwise the saved choice is applied.
+  // recorded; otherwise the saved choice is applied when Settings offers it. A
+  // saved language it no longer offers (a draft) keeps the language picked at
+  // boot, and the save keeps the choice for when that translation is complete.
   useEffect(() => {
     const saved = state.settings.language;
     const detected = i18n.resolvedLanguage;
+    const wanted = matchLanguage(saved);
     if (BOOT_SAVE_IS_NEW && detected && detected !== saved) {
       engine.updateSettings({ language: detected });
-    } else if (saved && i18n.language !== saved) {
-      void i18n.changeLanguage(saved);
+    } else if (wanted && i18n.resolvedLanguage !== wanted) {
+      void i18n.changeLanguage(wanted);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The tray menu is drawn by the desktop shell, outside the page, so it is handed
+  // its words in the player's language: at start and whenever the language changes.
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  useEffect(() => {
+    void platform.setTrayLabels({
+      show: t('tray.show'),
+      hide: t('tray.hide'),
+      quietMode: t('tray.quietMode'),
+      settings: t('tray.settings'),
+      quit: t('tray.quit'),
+    });
+  }, [platform, t, language]);
 
   // Desktop bridge events.
   useEffect(() => {
@@ -238,6 +256,7 @@ export function App() {
       <GameDock />
       <EventModal />
       <ConsequenceModal />
+      <ObservationReport />
       <OpeningSequence />
       <Onboarding />
       <Notifications />

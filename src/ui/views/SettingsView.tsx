@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGame } from '../../state/hooks';
 import { useStore } from '../../state/store';
-import { SUPPORTED_LANGUAGES, languageDisplayName } from '../../i18n';
+import { PLAYER_LANGUAGES, languageDisplayName, matchLanguage } from '../../i18n';
 import type { WindowCorner, WindowSettings } from '../../platform/types';
 import { Icon, type IconName } from '../../art/UiIcon';
 import { Tip, TipContent } from '../Tooltip';
@@ -287,11 +287,11 @@ export function SettingsView() {
               <label className="setting-row">
                 <span className="setting-row__label">{t('settings.languageLabel')}</span>
                 <select
-                  value={i18n.language}
+                  value={matchLanguage(i18n.resolvedLanguage ?? i18n.language) ?? 'en'}
                   onChange={(e) => changeLanguage(e.target.value)}
                   className="select"
                 >
-                  {SUPPORTED_LANGUAGES.map((l) => (
+                  {PLAYER_LANGUAGES.map((l) => (
                     <option key={l} value={l}>
                       {languageDisplayName(l)}
                     </option>

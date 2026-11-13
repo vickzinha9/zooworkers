@@ -1,6 +1,6 @@
 import type { EmployeeDef } from './types';
 
-// Six unlockable employees for 1.0. Each has a distinct silhouette colour,
+// The cast: 23 employees, Pip first. Each has a distinct silhouette colour,
 // a data-described passive the economy applies generically, outfits, a
 // favourite item, a rare event, a dialogue category and a home room.
 export const EMPLOYEES: EmployeeDef[] = [

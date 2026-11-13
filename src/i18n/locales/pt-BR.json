@@ -649,15 +649,15 @@
       "desc": "Seis cápsulas. Seis pranchetas. Não bata no vidro."
     },
     "broadcast": {
-      "name": "Estúdio de rádio",
+      "name": "Estúdio de Rádio",
       "desc": "Uma cabine revestida de cortiça. Alguém deixou a luz NO AR acesa desde ontem."
     },
     "repair": {
-      "name": "Oficina de reparos",
+      "name": "Oficina de Reparos",
       "desc": "Um box de manutenção para coisas que Compras insiste que ainda estão ótimas."
     },
     "conservatory": {
-      "name": "Jardim de inverno",
+      "name": "Jardim de Inverno",
       "desc": "Um anexo de ferro e vidro. A chuva interna não segue o clima lá fora."
     }
   },
@@ -2469,6 +2469,13 @@
     "close": "Fechar",
     "closeToTray": "Botão Fechar minimiza para a bandeja"
   },
+  "tray": {
+    "show": "Mostrar",
+    "hide": "Esconder",
+    "quietMode": "Modo Silencioso",
+    "settings": "Ajustes…",
+    "quit": "Sair"
+  },
   "photo": {
     "save": "Salvar foto",
     "saved": "Salvo!",
@@ -2839,6 +2846,41 @@
       "oddity": "Apareceu algo estranho"
     },
     "goLabel": "Ir até lá: {{what}} — {{room}}"
+  },
+  "observation": {
+    "title": "Relatório de observação",
+    "kind": "Anotações de campo",
+    "lede": "Quem decidiu o quê no escritório, e o que a equipe fez enquanto você olhava para outra janela.",
+    "stamp": "Uso interno",
+    "open": "Relatório de observação",
+    "fromReturn": "Ler o relatório de observação",
+    "now": "Acontecendo agora",
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "by": {
+      "team": "Equipe",
+      "player": "Você",
+      "unknown": "Arquivado"
+    },
+    "stampPassed": "Não observado",
+    "stampMoment": "Momento",
+    "stampWaiting": "Esperando",
+    "decision": {
+      "team": "A equipe decidiu sem você: {{choice}}",
+      "player": "Você decidiu: {{choice}}",
+      "unknown": "Decisão arquivada: {{choice}}"
+    },
+    "then": "Depois: {{choice}}",
+    "unnamed": "Nome não registrado",
+    "passed": "Aconteceu algo raro aqui, e ninguém viu de perto.",
+    "momentLine": "{{name}}: “{{line}}”",
+    "waitingWith": "{{name}} está esperando você dar uma olhada.",
+    "waitingAnon": "Está esperando você dar uma olhada.",
+    "go": "Ir até lá",
+    "goLabel": "Ir até: {{room}}",
+    "emptyTitle": "Nada registrado ainda neste ciclo.",
+    "emptyHint": "Deixe o escritório aberto num canto: o que a equipe decidir sozinha fica anotado aqui.",
+    "foot": "Anotado pelos pesquisadores da Nutshell. Só o que ficou registrado neste ciclo; uma reestruturação abre uma ficha nova."
   },
   "moment": {
     "company": "Empresa",
@@ -4164,15 +4206,15 @@
     "selection": "Coloque estas peças em {{room}}. Peças guardadas ou em outra sala não ativam a receita.",
     "allPieces": "Voltar ao catálogo",
     "broadcast-set": {
-      "name": "Estúdio de rádio",
+      "name": "Estúdio de Rádio",
       "effect": "Janela de combo +12%."
     },
     "repair-set": {
-      "name": "Oficina de reparos",
+      "name": "Oficina de Reparos",
       "effect": "Produção +4%."
     },
     "conservatory-set": {
-      "name": "Jardim de inverno",
+      "name": "Jardim de Inverno",
       "effect": "Ânimo-alvo +3."
     }
   },
@@ -5872,7 +5914,7 @@
       "close": "{{name}} (amizade próxima)",
       "set": "{{name}} (conjunto)",
       "brew": "Cada ajuda deixa 20% mais rápido (até duas).",
-      "tend": "Quem ajuda resolve por conta própria depois de um minuto.",
+      "tend": "Quem ajuda resolve por conta própria depois de {{seconds}} segundos.",
       "watch": "Com ajuda, fica na tela 50% mais tempo.",
       "deliver": "Com ajuda aqui, as entregas chegam mais vezes.",
       "none": {

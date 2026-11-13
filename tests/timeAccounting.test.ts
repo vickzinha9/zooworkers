@@ -259,6 +259,19 @@ describe('nothing waiting is decided while nobody can see the office', () => {
     );
   });
 
+  it('holds what is waiting through a minimized gap the shell vouches was awake', () => {
+    const e = env();
+    e.engine.state.stats.playTimeSeconds = 4000;
+    e.engine.queueIncident(ordinary().id);
+    const left = e.engine.state.happenings.incidents[0].until - e.now();
+    e.engine.setAttended(false);
+    e.advance(40 * 60_000); // minimized, and not woken once
+    expect(e.engine.catchUp({ suspendedSeconds: 0 })).toBeNull();
+    const still = e.engine.state.happenings.incidents.find((i) => i.eventId === ordinary().id);
+    expect(still).toBeDefined();
+    expect(still!.until - e.now()).toBe(left);
+  });
+
   it('resumes an imported company as it was filed, and importing it again pays nothing', () => {
     const e = env();
     e.engine.state.stats.playTimeSeconds = 4000;
@@ -276,5 +289,273 @@ describe('nothing waiting is decided while nobody can see the office', () => {
       expect(live.catchUp()).toBeNull();
       expect(live.state.lastSaved).toBe(e.now());
     }
+  });
+});
+
+// Windows: a minimized desktop window can go more than five minutes without a single
+// timer, with the computer awake all along. The desktop shell knows how much of such a
+// gap the computer was really suspended (`catchUp`'s hint); the rest is open play.
+
+const paidSoFar = (engine: GameEngine) =>
+  engine.state.stats.totalNutsEarned + engine.state.crate.nuts;
+
+/** A company whose happenings stay quiet, so two ways of settling compare on production alone. */
+function quiet(setup?: (e: ReturnType<typeof env>) => void) {
+  const e = env(company());
+  e.engine.state.stats.playTimeSeconds = 10;
+  vi.spyOn(e.engine, 'maybeRollEvent').mockImplementation(() => undefined);
+  setup?.(e);
+  return e;
+}
+
+/** `seconds` of open play with the loop woken every half second. */
+function wokenOften(seconds: number, setup?: (e: ReturnType<typeof env>) => void) {
+  const e = quiet(setup);
+  const start = paidSoFar(e.engine);
+  const t0 = e.now();
+  for (let i = 1; i <= seconds * 2; i += 1) {
+    e.set(t0 + i * 500);
+    e.engine.catchUp();
+  }
+  return { e, paid: paidSoFar(e.engine) - start };
+}
+
+/** One gap of `seconds`, settled with the shell's word on how much of it was suspended. */
+function vouched(
+  seconds: number,
+  suspendedSeconds: number,
+  setup?: (e: ReturnType<typeof env>) => void,
+) {
+  const e = quiet(setup);
+  const start = paidSoFar(e.engine);
+  const played = e.engine.state.stats.playTimeSeconds;
+  e.advance(seconds * 1000);
+  const result = e.engine.catchUp({ suspendedSeconds });
+  return {
+    e,
+    result,
+    paid: paidSoFar(e.engine) - start,
+    played: e.engine.state.stats.playTimeSeconds - played,
+  };
+}
+
+describe('a long gap the desktop shell vouches for', () => {
+  it('pays ten unwoken minutes with nothing suspended at the open rules', () => {
+    const often = wokenOften(600);
+    const gap = vouched(600, 0);
+    expect(gap.result).toBeNull();
+    // It used to be settled as a sleep: the crate first, the rest at 60% (about 80%).
+    expect(Math.abs(gap.paid / often.paid - 1)).toBeLessThan(0.005);
+    expect(gap.played).toBeCloseTo(600, 6);
+    expect(gap.e.engine.settledUntil()).toBe(gap.e.now());
+    // Settled once: nothing is left for the next call, with or without the hint.
+    const paid = paidSoFar(gap.e.engine);
+    expect(gap.e.engine.catchUp({ suspendedSeconds: 0 })).toBeNull();
+    expect(gap.e.engine.catchUp()).toBeNull();
+    expect(paidSoFar(gap.e.engine)).toBe(paid);
+  });
+
+  it('settles the suspended part at the away rules and the rest at the open rules, open part first', () => {
+    // A x2 boost was running when the window went out of sight: it is valued in the
+    // open part, which comes first.
+    const boost = (e: ReturnType<typeof env>) => e.engine.addBoost(2, 30);
+    // Reference: four minutes of open play woken often, then six minutes asleep.
+    const often = wokenOften(240, boost);
+    often.e.advance(360_000);
+    const refAway = often.e.engine.settleAway(360);
+    const refTotal = often.paid + refAway.nutsEarned + refAway.crateFilled!;
+
+    const gap = vouched(600, 360, boost);
+    expect(gap.result?.ignored).toBe(false);
+    expect(gap.result?.seconds).toBeCloseTo(360, 6);
+    expect(gap.result?.cappedSeconds).toBeCloseTo(360, 6);
+    expect(gap.played).toBeCloseTo(240, 6);
+    expect(Math.abs(gap.result!.nutsEarned / refAway.nutsEarned - 1)).toBeLessThan(0.005);
+    expect(Math.abs(gap.result!.crateFilled! - refAway.crateFilled!)).toBeLessThanOrEqual(
+      refAway.crateFilled! * 0.005 + 1,
+    );
+    expect(Math.abs(gap.paid / refTotal - 1)).toBeLessThan(0.005);
+    expect(gap.e.engine.settledUntil()).toBe(gap.e.now());
+    expect(gap.e.engine.catchUp({ suspendedSeconds: 360 })).toBeNull();
+  });
+
+  it('never settles more than the gap: suspended throughout (or more) is today’s sleep', () => {
+    for (const suspended of [600, 900, 1e12]) {
+      const a = env();
+      const b = env();
+      a.advance(600_000);
+      b.advance(600_000);
+      expect(a.engine.catchUp({ suspendedSeconds: suspended })).toEqual(b.engine.catchUp());
+      expect(JSON.stringify(a.engine.state)).toBe(JSON.stringify(b.engine.state));
+    }
+  });
+
+  it('ignores a hint it cannot use, byte for byte', () => {
+    const odd: unknown[] = [Number.NaN, -1, Number.POSITIVE_INFINITY, -Infinity, '30', null];
+    for (const suspendedSeconds of odd) {
+      for (const gap of [600_000, 200_000, -3_600_000]) {
+        const a = env();
+        const b = env();
+        a.engine.addBoost(2, 30);
+        b.engine.addBoost(2, 30);
+        a.advance(gap);
+        b.advance(gap);
+        const hint = { suspendedSeconds } as unknown as { suspendedSeconds: number };
+        expect(a.engine.catchUp(hint)).toEqual(b.engine.catchUp());
+        expect(JSON.stringify(a.engine.state)).toBe(JSON.stringify(b.engine.state));
+      }
+    }
+  });
+
+  it('leaves short gaps and a turned-back clock to the usual rule, hint or not', () => {
+    for (const gap of [200_000, -3_600_000]) {
+      const a = env();
+      const b = env();
+      a.advance(gap);
+      b.advance(gap);
+      expect(a.engine.catchUp({ suspendedSeconds: 150 })).toEqual(b.engine.catchUp());
+      expect(JSON.stringify(a.engine.state)).toBe(JSON.stringify(b.engine.state));
+    }
+  });
+
+  it('ends a boost and a Focus Harvest inside an unwoken gap where they ended in time', () => {
+    const setup = (e: ReturnType<typeof env>) => {
+      e.engine.addBoost(2, 30);
+      e.engine.startFocus(1);
+    };
+    const often = wokenOften(600, setup);
+    const gap = vouched(600, 0, setup);
+    expect(Math.abs(gap.paid / often.paid - 1)).toBeLessThan(0.005);
+    expect(gap.e.engine.state.focus.active).toBe(false);
+    expect(gap.e.engine.state.focus.completedSessions).toBe(
+      often.e.engine.state.focus.completedSessions,
+    );
+  });
+
+  it('completes Focus at its end, so its encouragement runs the two minutes right after', () => {
+    const gap = vouched(330, 0, (e) => e.engine.startFocus(4));
+    const ended = gap.e.now() - 330_000 + 240_000;
+    expect(gap.e.engine.state.focus.active).toBe(false);
+    expect(gap.e.engine.state.focus.completedSessions).toBe(1);
+    const cheer = gap.e.engine.state.boosts.find((b) => b.multiplier === 1.2);
+    expect(cheer?.endsAt).toBe(ended + 120_000);
+  });
+
+  it('pays more than an hour unwoken in full, in at most 120 slices', () => {
+    // The office's own moments (a helper's quick fix and its short rush) are rolled
+    // at the end of each settlement, so over two hours one settlement and a hundred
+    // and twenty differ by them (measured: 1.8%); this compares the production rule.
+    const noOffice = (e: ReturnType<typeof env>) =>
+      vi
+        .spyOn(e.engine as unknown as { stepOffice(seconds: number): void }, 'stepOffice')
+        .mockImplementation(() => undefined);
+    const e = quiet(noOffice);
+    const start = paidSoFar(e.engine);
+    const t0 = e.now();
+    for (let minute = 1; minute <= 120; minute += 1) {
+      e.set(t0 + minute * 60_000);
+      e.engine.catchUp();
+    }
+    const often = paidSoFar(e.engine) - start;
+
+    const g = quiet(noOffice);
+    const steps = vi.spyOn(
+      g.engine as unknown as { stepSimulation(dt: number): void },
+      'stepSimulation',
+    );
+    const before = paidSoFar(g.engine);
+    const played = g.engine.state.stats.playTimeSeconds;
+    g.advance(7_200_000);
+    expect(g.engine.catchUp({ suspendedSeconds: 0 })).toBeNull();
+    expect(steps.mock.calls.length).toBeLessThanOrEqual(120);
+    expect(g.engine.state.stats.playTimeSeconds - played).toBeCloseTo(7200, 6);
+    expect(Math.abs((paidSoFar(g.engine) - before) / often - 1)).toBeLessThan(0.005);
+  });
+
+  it('keeps the work of a days-long awake gap bounded', () => {
+    const e = env();
+    const rng = (e.engine as unknown as { rng: { chance(p: number): boolean } }).rng;
+    const rolls = vi.spyOn(rng, 'chance');
+    const steps = vi.spyOn(
+      e.engine as unknown as { stepSimulation(dt: number): void },
+      'stepSimulation',
+    );
+    const played = e.engine.state.stats.playTimeSeconds;
+    e.advance(3 * 86_400_000);
+    expect(e.engine.catchUp({ suspendedSeconds: 0 })).toBeNull();
+    expect(e.engine.state.stats.playTimeSeconds - played).toBeCloseTo(3 * 86_400, 3);
+    expect(steps.mock.calls.length).toBeLessThanOrEqual(120);
+    // Finds and the office's own moments are rolled for an hour at most (it used to
+    // be one roll per 10-15 s of the whole gap: over a hundred thousand here).
+    expect(rolls.mock.calls.length).toBeLessThan(5_000);
+    expect(e.engine.state.finds.length).toBeLessThanOrEqual(BALANCE.finds.maxWaiting);
+  });
+
+  it('files a vouched gap once: a reload or an import straight after pays nothing for it again', () => {
+    const gap = vouched(600, 240);
+    const e = gap.e;
+    e.engine.save();
+    expect(e.engine.state.lastSaved).toBe(e.now());
+    const paid = paidSoFar(e.engine);
+    const file = JSON.stringify(e.engine.state);
+    expect(e.engine.catchUp({ suspendedSeconds: 240 })).toBeNull();
+    expect(paidSoFar(e.engine)).toBe(paid);
+    e.advance(1_000);
+    const back = new GameEngine(reload(e.engine.state), { deterministic: true, now: e.now });
+    expect(back.settleClosedTime()?.seconds).toBeCloseTo(1, 3);
+    const live = new GameEngine(company(), { deterministic: true, now: e.now });
+    live.replaceState(gameStateSchema.parse(JSON.parse(file)) as GameState);
+    expect(live.catchUp({ suspendedSeconds: 0 })).toBeNull();
+    expect(paidSoFar(live)).toBeCloseTo(paid, 6);
+  });
+
+  // A starved, minimized renderer can take seconds over one catch-up. The store pairs
+  // the instant the company is settled to with the monotonic clock read just before
+  // the call, so that instant must be the one measured as the call began.
+  it('ends settled at the instant it measured, however long the settlement itself takes', () => {
+    const cases: Array<[number, Parameters<GameEngine['catchUp']>[0]]> = [
+      [60_000, undefined],
+      [600_000, undefined],
+      [600_000, { suspendedSeconds: 0 }],
+      [600_000, { suspendedSeconds: 240 }],
+      [600_000, { suspendedSeconds: 900 }],
+    ];
+    for (const [gapMs, hint] of cases) {
+      let now = START;
+      let crawl = 0; // ms the clock moves at each read while the call runs
+      const clock = () => {
+        const t = now;
+        now += crawl;
+        return t;
+      };
+      const engine = new GameEngine(company(), { deterministic: true, now: clock });
+      engine.state.stats.playTimeSeconds = 10;
+      now += gapMs;
+      const measured = now;
+      crawl = 250;
+      engine.catchUp(hint);
+      crawl = 0;
+      expect(now).toBeGreaterThan(measured); // real time passed during the call
+      expect(engine.settledUntil()).toBe(measured);
+    }
+  });
+
+  it('settles a boot to the instant it measured too, however long that takes', () => {
+    let now = START;
+    let crawl = 0;
+    const clock = () => {
+      const t = now;
+      now += crawl;
+      return t;
+    };
+    const state = company();
+    state.lastSaved = START - 10 * 60_000; // closed for ten minutes
+    const engine = new GameEngine(state, { deterministic: true, now: clock });
+    const measured = now;
+    crawl = 250;
+    expect(engine.settleClosedTime()?.seconds).toBeCloseTo(600, 6);
+    crawl = 0;
+    expect(now).toBeGreaterThan(measured);
+    expect(engine.settledUntil()).toBe(measured);
   });
 });

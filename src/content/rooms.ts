@@ -1,6 +1,6 @@
 import type { RoomDef } from './types';
 
-// Eighteen visually distinct rooms/floors. The office scene stacks these vertically
+// Twenty-one visually distinct rooms/floors. The office scene stacks these vertically
 // as they unlock, and several share a floor so the building fills out sideways too.
 // `founder-desk` is always present.
 export const ROOMS: RoomDef[] = [

@@ -207,6 +207,9 @@ const main = async () => {
       window.desktop = {
         getWindowSettings: async () => ({}),
         setWindowSettings: noop,
+        setAlwaysOnTop: noop,
+        setClickThrough: noop,
+        moveToCorner: noop,
         setScale: noop,
         hideToTray: noop,
         show: noop,
@@ -216,6 +219,9 @@ const main = async () => {
         closeWindow: noop,
         quit: noop,
         getIdleSeconds: async () => 0,
+        setTrayLabels: async () => true,
+        // Unknown, as a browser: the game keeps its own rule for long gaps.
+        getSuspendedMs: async () => null,
         getPlatformInfo: async () => ({
           isDesktop: true,
           platform: 'win32',
